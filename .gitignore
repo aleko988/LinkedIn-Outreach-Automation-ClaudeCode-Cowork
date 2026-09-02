@@ -1,0 +1,26 @@
+# Personal data - never commit
+connections.csv
+seen_companies.txt
+
+# Live campaign targeting (the user's current settings). Gitignored so personal
+# targeting never ships; a fresh clone falls back to outreach_config.example.json.
+outreach_config.json
+
+# Per-machine setup marker - written after a successful local setup so a second
+# tool (e.g. Cowork) opening the same folder skips setup instead of re-running it.
+# Must stay gitignored: a fresh clone should NOT inherit an "already set up" flag.
+setup_complete.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+# Stray skill bundles (the .claude/skills/ folders are the source of truth)
+*.skill
+
+# Claude personal settings (keep launch.json but not local permissions)
+.claude/settings.local.json
