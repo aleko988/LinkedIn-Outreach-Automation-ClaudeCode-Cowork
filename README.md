@@ -49,14 +49,15 @@ Anything that changes *what* gets searched or *how* the note reads is a settings
 
 ## Runs on a schedule, not just on demand
 
-Cowork drives your logged-in browser locally, so it can run this unattended - two separate scheduled tasks, deliberately kept apart:
+Cowork drives your logged-in browser locally, so it can run this unattended. Company-finding, sending, checking acceptances, and following up are separate steps that can be scheduled independently:
 
 | Schedule | What it does | Needs you? |
 |---|---|---|
-| **Weekly (or whenever)** | Finds new companies, finds the right person at each, drafts notes, sends up to the daily cap. | Yes, once - it shows the batch and waits for a yes before the first send of the run. |
-| **Daily** | Checks LinkedIn's Connections page for new acceptances (stopping the moment it reaches someone already seen, never scanning the whole list), then messages anyone who accepted with no message yet - immediately if they never got a note, on the normal 3/8-day cadence otherwise. | No - it never sends a new connection request, so it can run fully unattended. |
+| **Company finding** | Finds new companies matching your ICP and adds them to the backlog. Currently run manually/on demand rather than on a timer. | Yes, you trigger it. |
+| **Daily send pass** | Works through the existing backlog: finds a persona at each company, drafts the note, sends under the daily cap and monthly note quota. Also runs the acceptance check and follow-up pass at the end. | Depends on `confirm_before_first_send` - can run fully unattended if set to `false`, otherwise waits for a one-time yes on the first batch. |
+| **Daily acceptance check only** | A lighter alternative to the above: just checks LinkedIn's Connections page for new acceptances (stopping the moment it reaches someone already seen) and follows up - no sending. | No - never sends a new connection request. |
 
-Both are plain scheduled-task prompts pointed at this project - see `CLAUDE.md` for the exact wording to give Cowork.
+These are plain scheduled-task prompts pointed at this project - see `CLAUDE.md` for the exact wording, and for the overlap to watch for if you run more than one of these on the same timer.
 
 ## The two limits that protect your account
 

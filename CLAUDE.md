@@ -123,25 +123,27 @@ Before the first outreach run, tell the user in plain language what will happen:
 3. **Message accepted connections** is a lighter, on-demand entry point into just the follow-up pass - message everyone already accepted with no message yet, without re-checking for new acceptances or running the full find-and-send cycle. Use it to clear the dashboard's "Awaiting message" tab right now, rather than waiting for the daily schedule.
 4. The **dashboard** reads `connections.csv` and renders it as the weekly sheet: company, profile, persona, request sent, follow up - plus tabs for who's awaiting a message vs. already messaged.
 
-## Scheduling (the weekly prospecting run, and the daily acceptance check)
+## Scheduling
 
-A scheduled run needs a **logged-in LinkedIn browser** and the **local** `connections.csv`, so it must run **on the user's machine**, not as a cloud agent. There are two different scheduled tasks - do not merge them.
+A scheduled run needs a **logged-in LinkedIn browser** and the **local** `connections.csv`, so it must run **on the user's machine**, not as a cloud agent. This project has been run with up to three distinct scheduled tasks - they overlap in what they touch, so read the note at the end before assuming all three should run together.
 
-### Weekly (or on-demand): find companies and send requests
+### Company finding: on-demand only for this campaign
 
-- **Cowork scheduled task (runs locally).** Example task prompt: *"Use the LinkedIn Company Finder skill to find new companies. When that finishes, use the LinkedIn Connect Outreach skill to find the right person at each and draft notes. Give a short combined summary."*
-- **On-demand in Claude Code.** The user opens the project and says *"run my weekly outreach"*.
+Finding new companies (`linkedin-company-finder`) is currently **not** wired into a schedule - the user adds companies to `connections.csv` manually/separately, and the scheduled tasks below only work through that existing backlog. If asked to schedule company-finding again, the original combined pattern still works: *"Use the LinkedIn Company Finder skill to find new companies. When that finishes, use the LinkedIn Connect Outreach skill to find the right person at each and draft notes."*
 
-**Ordering:** the finder must finish before outreach starts. A single chained task guarantees this. Outreach is idempotent and only touches rows without a persona.
+### Daily send pass: persona + note + send, on the existing backlog
 
-**Always required:** a logged-in LinkedIn session, the machine awake, and - while `confirm_before_first_send` is on - someone available to approve the batch. Without that approval a scheduled run correctly stops at drafts.
+Runs Steps 1-9 of `linkedin-connect-outreach` against companies **already in `connections.csv`** - find a persona, draft the note, send under the daily cap and monthly note quota - explicitly **not** finding new companies. Current live task prompt:
 
-### Daily: check for new acceptances and stage follow-ups
+> *"Run the LinkedIn Connect Outreach project's daily send pass ... Use the linkedin-connect-outreach:linkedin-connect-outreach skill ... to run Steps 1 through 9 ... confirm_before_first_send is now false, so send directly without asking for approval - do not stop to wait for a human ... Do NOT run the LinkedIn Company Finder skill ... After the send pass, also run Step 8 (check for new connection acceptances) and, if followup_enabled is true, Step 10 ... Respect every hard limit ... If LinkedIn shows a CAPTCHA, security checkpoint, or the weekly invite limit, stop immediately."*
 
-A separate, much lighter task that should run **once a day**: it only checks who accepted a pending connection request and drafts the follow-up message for anything now due - it never finds new companies or sends new connection requests.
+**`confirm_before_first_send` is currently `false` for this campaign** - this task sends real connection requests with no human approval step, on a timer, unattended. That is a deliberate, explicit choice the user made (see `outreach_config.json`), not this project's default - the shipped default is `true`. If a user asks to schedule sending without mentioning this, confirm they understand what turning it off means before editing the config; never flip it to `false` on your own initiative.
 
-- **Cowork scheduled task (runs locally, daily).** Example task prompt: *"Run Step 11 (the daily acceptance-check pass) of the LinkedIn Connect Outreach skill: check for newly accepted connections and draft any follow-ups now due. Do not find new companies or send new connection requests. Give a short summary."*
-- This never needs `confirm_before_first_send` - it does not send connection requests. Whether it needs to ask the user anything at all depends on `followup_auto_send` (see `RETARGETING.md`): when `false` (the default for this campaign), it only drafts and stages messages in the dashboard for the user to send by hand, so it can run fully unattended.
+### Daily acceptance-check pass (Step 11): catch acceptances, stage/send follow-ups
+
+The lighter, older pattern - Step 8 + Step 10 only, no sending. Task prompt: *"Run Step 11 (the daily acceptance-check pass) of the LinkedIn Connect Outreach skill: check for newly accepted connections and draft any follow-ups now due. Do not find new companies or send new connection requests."* Whether it sends the follow-up itself or only drafts it depends on `followup_auto_send`.
+
+> **Overlap warning:** the daily send pass above *also* runs Step 8 and Step 10 at the end. Running both this task and the send-pass task on the same schedule means Step 8/10 run twice a day - harmless (the second pass just finds nothing new, since the cutoff already advanced and due-followups are gated by `followup_1_date`/`followup_2_date`), but wasteful browser time. If the user has both configured, mention this and offer to fold the acceptance-check into the send pass so there is only one schedule to maintain.
 
 ## Recognizing a settings change (read this - users speak casually)
 
