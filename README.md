@@ -47,6 +47,17 @@ Say it in plain language - the agent works out whether you mean "run it" or "cha
 
 Anything that changes *what* gets searched or *how* the note reads is a settings change, handled through `RETARGETING.md`. It never touches rows you already have.
 
+## Runs on a schedule, not just on demand
+
+Cowork drives your logged-in browser locally, so it can run this unattended - two separate scheduled tasks, deliberately kept apart:
+
+| Schedule | What it does | Needs you? |
+|---|---|---|
+| **Weekly (or whenever)** | Finds new companies, finds the right person at each, drafts notes, sends up to the daily cap. | Yes, once - it shows the batch and waits for a yes before the first send of the run. |
+| **Daily** | Checks LinkedIn's Connections page for new acceptances (stopping the moment it reaches someone already seen, never scanning the whole list), then messages anyone who accepted with no message yet - immediately if they never got a note, on the normal 3/8-day cadence otherwise. | No - it never sends a new connection request, so it can run fully unattended. |
+
+Both are plain scheduled-task prompts pointed at this project - see `CLAUDE.md` for the exact wording to give Cowork.
+
 ## The two limits that protect your account
 
 Both are enforced in `update_outreach.py`, which **refuses the write** rather than bending:
