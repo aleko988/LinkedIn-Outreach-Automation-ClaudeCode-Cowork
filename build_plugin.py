@@ -43,6 +43,13 @@ SKILLS = {
         "script": "update_outreach.py",
         "script_step": "the note-validation, send-cap and CSV-update steps",
     },
+    "linkedin-message-accepted": {
+        "title": "LinkedIn Message Accepted Connections",
+        "description": "Message everyone who accepted a connection request but has no message yet, or is due for their next follow-up - without running a full find-companies-and-send-requests cycle. Use when asked to message people who accepted, catch up with new connections, or clear the Awaiting message queue.",
+        "script": "update_outreach.py",
+        "script_dir": "linkedin-connect-outreach",  # reuses the connect-outreach skill's script - no duplicate copy
+        "script_step": "the due-followups lookup and CSV-update steps",
+    },
 }
 
 PLUGIN_JSON = {
@@ -125,7 +132,7 @@ Read the full instructions from:
 Follow every step in that file exactly. Use `{{PROJECT_ROOT}}` wherever the instructions
 reference `{{project_root}}`. The helper-script path for {meta['script_step']} is:
 ```
-{{PROJECT_ROOT}}/.claude/skills/{name}/scripts/{meta['script']}
+{{PROJECT_ROOT}}/.claude/skills/{meta.get('script_dir', name)}/scripts/{meta['script']}
 ```
 That script loads `{{PROJECT_ROOT}}/outreach_config.json` (the current knobs) at the start
 of the run, so whatever the user last set is what gets used - no rebuild needed. It also

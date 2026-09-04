@@ -1,48 +1,57 @@
 {
   "_README": "SINGLE SOURCE OF TRUTH for which companies get found, which person at each company gets the connection request, and what the note says. This is the SHIPPED DEFAULT. The live, user-edited copy is outreach_config.json (gitignored). Both skills load the live config at the START of every run - scheduled or on-demand - and use ONLY these values. To retarget, follow RETARGETING.md, which edits the live outreach_config.json. Never edit knob values inline in the skills; edit them here.",
-  "last_updated": "2026-09-02",
-  "campaign_label": "Data teams at companies hiring analysts",
+  "last_updated": "2026-09-04",
+  "campaign_label": "Job search networking - Data/Analytics roles, Europe, remote-friendly",
 
   "finder": {
-    "search_keywords": "Data+Analyst",
+    "search_keywords": ["Data+Analyst", "Data+Extraction+Specialist", "Web+Scraping+Specialist", "Analytics+Engineer", "BI+Developer", "Power+BI+Developer", "Business+Intelligence+Analyst", "SQL+Analyst", "Data+Engineer"],
+    "search_keywords_label": "Data Analyst, Data Extraction Specialist, Web Scraping Specialist, Analytics Engineer, BI Developer, Power BI Developer, Business Intelligence Analyst, SQL Analyst, Data Engineer",
     "search_mode": "jobs",
-    "search_mode_label": "companies currently hiring for the keyword",
-    "location": "Worldwide",
-    "industry_filter": ["Software Development", "Information Technology", "Financial Services", "Internet"],
-    "company_size_allow": ["11-50", "51-200", "201-500", "501-1,000", "1K-5K"],
-    "company_size_label": "11 to 5,000 employees",
-    "companies_per_run": 10,
-    "pages_to_scan": 2,
+    "search_mode_label": "companies currently hiring for one of these keywords",
+    "location": "Europe",
+    "remote_only": true,
+    "remote_only_label": "Remote roles only (f_WT=2)",
+    "hq_location_filter": ["Europe", "Remote", "Germany", "United Kingdom", "Ireland", "Netherlands", "France", "Spain", "Portugal", "Poland", "Sweden", "Norway", "Denmark", "Finland", "Italy", "Switzerland", "Austria", "Belgium", "Czechia", "Romania", "Georgia", "Estonia", "Lithuania", "Latvia"],
+    "hq_location_filter_label": "Europe-based (or remote-first) companies",
+    "industry_filter": ["Software Development", "Information Technology", "Internet", "Technology, Information and Internet", "IT Services and IT Consulting"],
+    "industry_filter_label": "B2B SaaS and B2C tech",
+    "company_size_allow": ["1-10", "11-50", "51-200", "201-500", "501-1,000", "1K-5K"],
+    "company_size_label": "Startup to scaleup (up to ~5,000 employees)",
+    "companies_per_run": 25,
+    "pages_to_scan": 4,
     "require_company_page": true,
     "blocklist_companies": ["Swooped", "Ladders", "Jobgether", "Recruit.net", "Jobot", "Nexxt", "Talentify", "Employbl", "Adzuna", "Hirect", "Sci-Rec", "Upwork", "Fiverr"],
     "blocklist_phrases": ["currently partnered with", "we are not the employer", "on behalf of", "our client is", "confidential company", "staffing agency"],
-    "signal_keywords": ["hiring", "raised", "Series A", "Series B", "funding", "launched", "expanding", "new office"],
+    "signal_keywords": ["hiring", "raised", "Series A", "Series B", "funding", "launched", "expanding", "new office", "remote-first", "remote friendly"],
     "skip_if_already_in_tracker": true
   },
 
   "outreach": {
     "persona_tiers": [
-      { "n": 1, "type": "Head of Data",     "who": "Head of Data, Head of Analytics, Director of Data, VP Data",     "keywords": "Head+of+Data+Analytics+Director" },
-      { "n": 2, "type": "Analytics Manager", "who": "Data/Analytics Manager or Senior Manager who owns the analyst team", "keywords": "Data+Analytics+Manager" },
-      { "n": 3, "type": "CTO or CDO",        "who": "CTO, Chief Data Officer, VP Engineering at smaller companies",   "keywords": "CTO+Chief+Data+Officer+VP+Engineering" },
-      { "n": 4, "type": "Founder or CEO",    "who": "Founder, Co-founder or CEO - use at companies under 50 people",  "keywords": "Founder+CEO+Co-founder" }
+      { "n": 1, "type": "Recruiter / Talent Acquisition", "who": "Technical Recruiter, Talent Acquisition Partner, People/Talent team member handling data or engineering roles", "keywords": "Recruiter+Talent+Acquisition", "function_code": "12" },
+      { "n": 2, "type": "Data/Analytics Hiring Manager", "who": "Head of Data, Head of Analytics, Analytics Engineering Manager, Lead Data Analyst - the person who'd actually manage this role", "keywords": "Head+of+Data+Analytics+Manager+Lead", "function_code": "25" },
+      { "n": 3, "type": "Founder or CTO", "who": "Founder, Co-founder or CTO - use at companies under the small-company threshold, where there is no dedicated data lead yet", "keywords": "Founder+CTO+Co-founder", "function_code": "13" }
     ],
     "personas_per_company": 1,
-    "personas_per_company_label": "1 person per company",
+    "personas_per_company_label": "1 person per company (recruiter first, hiring manager as fallback)",
     "function_code": "25",
     "small_company_threshold": 50,
-    "small_company_tier_override": 4,
+    "small_company_tier_override": 3,
     "prefer_second_degree": true,
     "prefer_same_location": false,
     "skip_if_no_persona": "keep",
 
     "note_char_limit": 200,
-    "note_char_limit_label": "200 characters max per connection note",
-    "note_tone": "Warm, direct, peer-to-peer. Sounds like a real person, not a pitch. No flattery, no buzzwords, no exclamation marks.",
-    "note_must_include": ["their first name", "one concrete detail about their company or team"],
-    "note_must_avoid": ["I hope this finds you well", "quick question", "picking your brain", "synergy", "reaching out to see if", "em dashes"],
-    "note_ask": "Simple connect ask. No meeting request, no link, no attachment in the first note.",
+    "note_char_limit_label": "200 characters max per connection note (counting spaces)",
+    "note_tone": "Proactive, not passive: name the specific angle that made you reach out - a career transition, a project, a skill, the exact role they're hiring for - and say plainly that it stood out to you. Then a genuine, low-pressure ask to connect or learn more, with a soft acknowledgement that it's a bit of an ask from a stranger. Warm and direct, first person. No flattery filler ('hope you're having a great week'), no buzzwords, no em dashes.",
+    "note_must_include": ["their first name", "the specific angle or detail that made you reach out (their transition, project, role, or what the company/team is building)", "a brief low-pressure close (e.g. 'no worries if it's too much')"],
+    "note_must_avoid": ["I hope this finds you well", "quick question", "picking your brain", "synergy", "reaching out to see if", "em dashes", "please consider my application", "attached is my resume", "I am looking for a job"],
+    "note_ask": "Connect, or an open invite to hear about their journey/team - no CV attachment, no explicit job ask, no link, in the first note.",
     "note_signoff": "none",
+    "note_example": "Hi James, your move from healthcare into data stood out to me. I'd love to hear about that journey. No worries if this is a big ask from a stranger!",
+
+    "note_monthly_limit": 5,
+    "note_monthly_limit_label": "5 notes per month (LinkedIn free-plan limit on personalized invites)",
 
     "daily_connection_cap": 15,
     "daily_connection_cap_label": "15 connection requests per day",
@@ -51,13 +60,15 @@
     "stop_on_weekly_invite_limit": true,
 
     "followup_enabled": true,
+    "followup_auto_send": false,
+    "followup_auto_send_label": "Draft only - you send it yourself from the dashboard",
     "followup_1_days": 3,
     "followup_1_label": "day 3 after acceptance",
     "followup_2_days": 8,
     "followup_2_label": "day 8 after acceptance",
     "followup_char_limit": 400,
-    "followup_tone": "Short, useful, one clear ask. Reference the note they accepted."
+    "followup_tone": "Short, genuine, references what you noticed in the note they accepted. Ask about their team's data stack or how the role came about - one open, low-pressure question. No direct 'do you have a job for me' in follow-up 1."
   },
 
-  "custom_fields_added": ["signal", "why_relevant", "persona_mutuals", "week"]
+  "custom_fields_added": ["signal", "why_relevant", "persona_mutuals", "week", "note_sent_with_request"]
 }

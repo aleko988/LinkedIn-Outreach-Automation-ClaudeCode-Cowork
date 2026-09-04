@@ -75,13 +75,15 @@ The only thing that changes the CSV is **adding a new captured field** (a new co
 ### `finder` block
 | Config key | Controls | Shipped default |
 |---|---|---|
-| `search_keywords` | the `keywords=` param (URL-encoded, `+` between words) | `Data+Analyst` |
+| `search_keywords` | the `keywords=` param (URL-encoded, `+` between words) - a single string, or a **list** of role queries run one after another in the same pass | `Data+Analyst` |
 | `search_mode` | which LinkedIn surface to search: `jobs` (companies hiring - strongest signal), `companies`, or `posts` | `jobs` |
 | `location` | the `location=` param | `Worldwide` |
 | `industry_filter` | which industries qualify; empty list means any | see config |
 | `company_size_allow` | which employee bands qualify; empty list means any | 11 to 5K |
-| `companies_per_run` | how many NEW companies to add per run | `10` |
-| `pages_to_scan` | how many result pages to page through | `2` |
+| `companies_per_run` | how many NEW companies to add per run, across all keywords combined | `10` |
+| `pages_to_scan` | how many result pages to page through, per keyword | `2` |
+| `remote_only` | add LinkedIn's remote-jobs filter (`f_WT=2`) to the search | `false` |
+| `hq_location_filter` | which company HQ locations qualify (loose text match against the extracted `hq_location`); empty means any | `[]` |
 | `require_company_page` | drop anything with no real LinkedIn company page | `true` |
 | `blocklist_companies` | staffing agencies and aggregators to skip | see config |
 | `blocklist_phrases` | hidden-employer phrases to skip | see config |
@@ -91,9 +93,9 @@ The only thing that changes the CSV is **adding a new captured field** (a new co
 ### `outreach` block
 | Config key | Controls | Shipped default |
 |---|---|---|
-| `persona_tiers` | who to contact, in priority order (`type`, `who`, `keywords`) | Head of Data / Analytics Manager / CTO or CDO / Founder or CEO |
-| `personas_per_company` | how many people per company | `1` |
-| `function_code` | `facetCurrentFunction=` on the People tab | `25` |
+| `persona_tiers` | who to contact, in priority order (`type`, `who`, `keywords`, and optionally a per-tier `function_code`) | Recruiter/TA / Data-Analytics Hiring Manager / Founder or CTO |
+| `personas_per_company` | how many people per company - `1` or `2` (the CSV has two contact slots; see "Adding a new persona tier" below) | `1` |
+| `function_code` | fallback `facetCurrentFunction=` on the People tab when a tier has no `function_code` of its own | `25` |
 | `small_company_threshold` / `small_company_tier_override` | below N employees, jump straight to this tier (a 20-person company has no Head of Data) | `50` / tier `4` |
 | `prefer_second_degree` / `prefer_same_location` | tie-breakers when several people match | `true` / `false` |
 | `skip_if_no_persona` | `keep` or `delete` a company where nobody matched | `keep` |
@@ -103,12 +105,15 @@ The only thing that changes the CSV is **adding a new captured field** (a new co
 | `note_must_avoid` | banned phrases | "hope this finds you well", buzzwords, em dashes |
 | `note_ask` | what the note asks for | just connect, no meeting, no link |
 | `note_signoff` | signoff style | `none` |
+| `note_example` | a worked reference note matching the current shape and length - the skill copies its structure, never its literal words | see config |
+| **`note_monthly_limit`** | **max connection requests per calendar month that may include a note - enforced in code, for accounts without LinkedIn Premium** | `5` |
 | **`daily_connection_cap`** | **max requests per day - enforced in code** | `15` |
 | `pause_between_sends_seconds` | random pause range between sends | `[25, 60]` |
 | `confirm_before_first_send` | ask the user once per run before the first send | `true` |
 | `stop_on_weekly_invite_limit` | stop the whole run when LinkedIn caps the week | `true` |
 | `followup_enabled` | run the follow-up pass at all | `true` |
-| `followup_1_days` / `followup_2_days` | days after send before each follow-up | `3` / `8` |
+| `followup_auto_send` | `true` = the skill sends the follow-up itself (LinkedIn messages to existing connections aren't quota-limited, unlike connection notes); `false` = draft and stage it in the dashboard only, for the user to send by hand | `false` |
+| `followup_1_days` / `followup_2_days` | days after send before each scheduled follow-up. **Not consulted at all** for someone who accepted a *plain* connect (no note) - `--due-followups` marks them due immediately (`immediate_no_note: true`), since they never received the personalized content in the first place | `3` / `8` |
 | `followup_char_limit` | max length of a follow-up message | `400` |
 | `followup_tone` | how follow-ups read | short, useful, one clear ask |
 
@@ -198,4 +203,21 @@ If the user wants to **start capturing a field that does not exist yet** (e.g. "
 
 - **Swapping who a tier is** (e.g. tier 1 becomes "VP Marketing") is **config-only** - edit `persona_tiers`. No CSV change.
 - **Adding a 5th tier** is also config-only - the skill walks the list in order, whatever its length.
-- **Contacting more than one person per company** is a new captured field: bump `personas_per_company` AND add `persona2_*` columns via the additive procedure above, since the CSV has one persona slot per row today.
+- **Contacting more than one person per company**: set `personas_per_company: 2` in the config. This is now fully wired end to end (built via the additive-change procedure above) - here is what exists, for reference:
+
+### The second-contact columns and the `--persona` flag
+
+The CSV has exactly **two** contact slots per company row today (not an arbitrary N):
+
+| Primary persona column | Second-contact equivalent |
+|---|---|
+| `persona_name`, `persona_title`, `persona_linkedin`, `persona_tier` | `persona2_name`, `persona2_title`, `persona2_linkedin`, `persona2_tier` |
+| *(no equivalent - see below)* | `persona2_note` (no `persona2_location`/`persona2_mutuals` column) |
+| `connection_note`, `note_char_count` | `persona2_note` doubles as both - not auto length-checked by `--data` the way `connection_note` is, so the skill counts it itself before saving |
+| `connection_sent`, `date_sent`, `connection_result`, `note_sent_with_request`, `last_action_date` | `persona2_connection_sent`, `persona2_date_sent`, `persona2_connection_result`, `persona2_note_sent_with_request`, `persona2_last_action_date` |
+| `followup_1_message`, `followup_1_date`, `followup_2_message`, `followup_2_date`, `reply_status` | `persona2_followup_1_message`, `persona2_followup_1_date`, `persona2_followup_2_message`, `persona2_followup_2_date`, `persona2_reply_status` |
+| `outreach_status` | *(shared - no per-persona status column; it only ever reflects the primary persona)* |
+
+`update_outreach.py --mark-sent` and `--followup` both take a `--persona 1` (default) or `--persona 2` flag to pick which set of columns they write to (`--data` does not - it is field-name-driven, so address `persona2_reply_status` etc. directly). **The second contact is a fully separate connection request against the exact same `daily_connection_cap` and `note_monthly_limit`** - `--cap-check` and `--note-cap-check` already sum both personas' sends together (a company where both were messaged today counts as 2 toward the daily cap), so nothing needs tracking by hand. `--due-followups` also checks both contacts independently and returns one entry per contact, tagged `"persona": "1"` or `"2"`.
+
+**Going past 2 contacts per company** would need a third set of columns (`persona3_*`) added the same way, plus a `--persona 3` case in the script - follow the additive-change procedure above and extend `--persona`'s `choices` list.

@@ -1,13 +1,13 @@
 ---
 name: linkedin-company-finder
-description: Find relevant companies on LinkedIn matching your configured ideal-customer profile (ships tuned for companies hiring Data Analysts) and append them to a local CSV tracker. Use this skill when asked to find companies, build a prospect list, find leads, look for new accounts, or update the connection tracker. Also use it when a scheduled task fires for the weekly prospecting run.
+description: Find relevant companies on LinkedIn matching your configured target profile (currently tuned for a job search - companies in Europe hiring remotely for Data Analyst / Data Extraction / Web Scraping roles) and append them to a local CSV tracker. Use this skill when asked to find companies, build a prospect list, find leads, look for new accounts, or update the connection tracker. Also use it when a scheduled task fires for the weekly prospecting run.
 ---
 
 # LinkedIn Company Finder
 
 > **FORMATTING RULE - NO EM DASHES:** Never use em dashes anywhere in any output - not in connection notes, reports, summaries, or any other text. Use a regular hyphen (-) instead. This applies to every piece of text this skill generates, without exception.
 
-Finds companies on LinkedIn matching the configured ICP (loaded in Step 0a) and appends new ones to a local CSV, deduplicating by company slug. Ships tuned for companies hiring Data Analysts, but the skill text names no industry or role - all targeting lives in the outreach config.
+Finds companies on LinkedIn matching the configured target profile (loaded in Step 0a) and appends new ones to a local CSV, deduplicating by company slug. The skill text names no industry or role itself - all targeting lives in the outreach config, whether the goal is sales prospecting or (as currently configured) job-search networking.
 
 ---
 
@@ -59,13 +59,15 @@ for name in ('outreach_config.json', 'outreach_config.example.json'):
 
 | Code-word (config key) | Substituted into |
 |---|---|
-| `{search_keywords}` | the `keywords=` URL param (Step 1) |
+| `{search_keywords}` | the `keywords=` URL param - a LIST of role queries, run one after another (Step 1) |
 | `{search_mode}` | which LinkedIn surface to search: `jobs`, `companies`, or `posts` (Step 1) |
 | `{location}` | the `location=` URL param |
+| `{remote_only}` | if `true`, add the remote-jobs filter to the search URL (Step 1) |
+| `{hq_location_filter}` | which company HQ locations qualify - matched loosely against the extracted `hq_location` text (Step 3c) |
 | `{industry_filter}` | which industries qualify (Step 3c) |
 | `{company_size_allow}` | which employee-count bands qualify (Step 3c) |
-| `{companies_per_run}` | how many new companies to collect before stopping (Step 4) |
-| `{pages_to_scan}` | how many result pages to page through (Step 4) |
+| `{companies_per_run}` | how many new companies to collect before stopping, across ALL keyword queries combined (Step 4) |
+| `{pages_to_scan}` | how many result pages to page through, per keyword query (Step 4) |
 | `{require_company_page}` | if `true`, drop any company with no LinkedIn company page (Step 3c) |
 | `{blocklist_companies}` / `{blocklist_phrases}` | the aggregator/recruiter blocklist (Step 3b) |
 | `{signal_keywords}` | words that mark a "why now" signal worth recording (Step 3d) |
@@ -116,16 +118,21 @@ await (async () => {
 
 ## Step 1 - Navigate to the search
 
-Build the search URL from the code-words loaded in Step 0a. Which URL depends on `{search_mode}`:
+`{search_keywords}` may be a single string (legacy configs) or a **list** of role queries (e.g. `["Data+Analyst", "Data+Extraction+Specialist", "Web+Scraping+Specialist"]`). Treat a single string as a one-item list. **Run Steps 1 to 4 once per keyword in the list**, in order, stopping the whole run early the moment `{companies_per_run}` qualified companies have been collected in total across all keywords - do not run every keyword to its own separate `{companies_per_run}` quota.
+
+For each keyword, build the search URL. Which URL depends on `{search_mode}`:
 
 - **`jobs`** (default - finds companies that are actively hiring, the strongest buying signal):
-  `https://www.linkedin.com/jobs/search/?keywords={search_keywords}&location={location}&f_TPR=r604800`
+  `https://www.linkedin.com/jobs/search/?keywords={keyword}&location={location}&f_TPR=r604800`
+  If `{remote_only}` is true, append `&f_WT=2` (LinkedIn's "Remote" work-type filter).
 - **`companies`** (finds companies by name/description match):
-  `https://www.linkedin.com/search/results/companies/?keywords={search_keywords}`
+  `https://www.linkedin.com/search/results/companies/?keywords={keyword}`
 - **`posts`** (finds companies whose people are posting about the topic right now):
-  `https://www.linkedin.com/search/results/content/?keywords={search_keywords}&datePosted=%22past-week%22`
+  `https://www.linkedin.com/search/results/content/?keywords={keyword}&datePosted=%22past-week%22`
 
-Pages use the `start` parameter (`&start=25`, `&start=50`) for jobs, or `&page=2` for search results.
+Pages use the `start` parameter (`&start=25`, `&start=50`) for jobs, or `&page=2` for search results. `{pages_to_scan}` applies per keyword, not to the run as a whole.
+
+`{location}` for a broad region like "Europe" is best-effort - LinkedIn's location field does not always resolve a continent cleanly. Do not rely on it alone: the real qualification happens in Step 3c against `{hq_location_filter}`, which is what actually keeps only Europe-based (or remote-first) companies.
 
 Run the **page-ready gate** with the predicate matching the mode:
 ```javascript
@@ -231,6 +238,7 @@ JSON.stringify({ name, tagline, infoItems });
 **Now apply the ICP filters. Drop the company (no row) if any fails:**
 - `industry` is not in `{industry_filter}` - unless `{industry_filter}` is empty, which means any industry qualifies. Match loosely: a listed "Software Development" also matches "Software Development and IT".
 - `company_size` is not in `{company_size_allow}` - unless the list is empty. If size is not shown, keep the company and leave the field blank.
+- `hq_location` does not loosely match any entry in `{hq_location_filter}` - unless the list is empty, which means any location qualifies. Match on country/region name appearing anywhere in the extracted location text (e.g. `hq_location_filter` containing "Germany" matches an extracted "Berlin, Germany"). A company that came from a `{remote_only}` search but shows a non-European HQ still qualifies if `{hq_location_filter}` includes "Remote" - the job itself being remote is what matters there, not the HQ.
 - `{require_company_page}` is true and there is no real company page (a 404 or a redirect to a personal profile).
 
 ### 3d - Record the "why now" signal and why it is relevant
@@ -248,7 +256,7 @@ Use the `find` tool with the query: `"Visit website or Learn more external link"
 
 ## Step 4 - Paginate
 
-Continue through up to `{pages_to_scan}` pages using the `start` / `page` parameter, until you have `{companies_per_run}` qualified companies or you run out of results. Stop early if a page yields zero new slugs after the seen filter.
+Continue through up to `{pages_to_scan}` pages using the `start` / `page` parameter, until you have `{companies_per_run}` qualified companies (across all keywords in this run, see Step 1) or you run out of results. Stop early if a page yields zero new slugs after the seen filter. Once the current keyword's pages are exhausted (or `{companies_per_run}` is reached), move to the next keyword in `{search_keywords}`, if any remain and the total is not yet reached.
 
 ---
 

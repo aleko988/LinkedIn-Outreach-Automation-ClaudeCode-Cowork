@@ -14,8 +14,9 @@ find companies  ->  find the person  ->  write the note  ->  send  ->  follow up
 | | |
 |---|---|
 | **`/linkedin-company-finder`** | Searches LinkedIn for companies matching your ICP, qualifies them by industry and size, records a "why now" signal, and appends them to the tracker in a weekly bucket. |
-| **`/linkedin-connect-outreach`** | Walks your persona tiers to find the right person at each company, writes a note under the character limit, sends the connection request with pacing and a daily cap, and records the result. Runs the follow-up pass too. |
-| **Dashboard** (port 5002) | The weekly sheet - company, profile, persona, request sent, follow up - plus a ready-to-send queue, a follow-up-due queue, acceptance rate, and today's remaining cap. |
+| **`/linkedin-connect-outreach`** | Walks your persona tiers to find the right person at each company, writes a note under the character limit, sends the connection request with pacing and a daily cap, and records the result. Runs the daily acceptance check and follow-up pass too. |
+| **`/linkedin-message-accepted`** | Messages everyone already accepted with no message yet, or due for a follow-up - on demand, without a full find-and-send cycle. |
+| **Dashboard** (port 5002) | The weekly sheet - company, profile, persona, request sent, follow up - plus a ready-to-send queue, an awaiting-message queue, a follow-up-due queue, acceptance rate, and today's remaining cap. |
 
 ## Setup
 
@@ -27,7 +28,7 @@ python schema.py            # creates the one data file, connections.csv
 python dashboard/app.py     # http://localhost:5002
 ```
 
-For Cowork, install `dist/linkedin-connect-outreach.plugin` to get both skills in the panel.
+For Cowork, install `dist/linkedin-connect-outreach.plugin` to get all three skills in the panel.
 
 **You must be logged into LinkedIn** in the browser Claude controls. The skills act as you.
 

@@ -93,9 +93,10 @@ This creates an empty `connections.csv` with the correct columns. It will not ov
 
 ### 3. Skills
 
-**Claude Code:** the two skills in `.claude/skills/` auto-load. The user already has:
+**Claude Code:** the three skills in `.claude/skills/` auto-load. The user already has:
 - `/linkedin-company-finder` - finds new companies matching the ICP
 - `/linkedin-connect-outreach` - finds the right person, writes the note, sends the request
+- `/linkedin-message-accepted` - messages everyone already accepted with no message yet, or due for a follow-up, without a full find-and-send cycle
 
 **Cowork:** present `dist/linkedin-connect-outreach.plugin` with `present_files` so the user can click Install.
 
@@ -115,16 +116,18 @@ Before the first outreach run, tell the user in plain language what will happen:
 
 ### 6. Write the setup-complete marker (LAST, only after every step above succeeded)
 
-## How the two skills work together
+## How the three skills work together
 
 1. **Company finder** searches LinkedIn for companies matching the ICP and **appends** them as new rows to `connections.csv` (finder columns filled, outreach columns blank). It de-dups by company slug using `seen_companies.txt` and stamps a `week` bucket.
-2. **Connect outreach** scans `connections.csv` for **any row where `persona_name` is blank** - regardless of `outreach_status` or how long ago it was added - finds the right person per the configured tiers, writes a note of 200 characters or less, sends the request under the daily cap, and records the result.
-3. The outreach skill also runs the **follow-up pass**: accepted connections with no reply get follow-up 1 on day 3 and follow-up 2 on day 8 (both configurable).
-4. The **dashboard** reads `connections.csv` and renders it as the weekly sheet: company, profile, persona, request sent, follow up.
+2. **Connect outreach** scans `connections.csv` for **any row where `persona_name` is blank** - regardless of `outreach_status` or how long ago it was added - finds the right person per the configured tiers, writes a note of 200 characters or less, sends the request under the daily cap and monthly note quota, and records the result. It also runs the daily acceptance-check pass (Step 11: checks LinkedIn's Connections page for new acceptances) and the **follow-up pass**: accepted connections with no reply get messaged immediately if they never received a note, otherwise follow-up 1 on day 3 and follow-up 2 on day 8 (both configurable).
+3. **Message accepted connections** is a lighter, on-demand entry point into just the follow-up pass - message everyone already accepted with no message yet, without re-checking for new acceptances or running the full find-and-send cycle. Use it to clear the dashboard's "Awaiting message" tab right now, rather than waiting for the daily schedule.
+4. The **dashboard** reads `connections.csv` and renders it as the weekly sheet: company, profile, persona, request sent, follow up - plus tabs for who's awaiting a message vs. already messaged.
 
-## Scheduling (the weekly prospecting run)
+## Scheduling (the weekly prospecting run, and the daily acceptance check)
 
-A scheduled run needs a **logged-in LinkedIn browser** and the **local** `connections.csv`, so it must run **on the user's machine**, not as a cloud agent.
+A scheduled run needs a **logged-in LinkedIn browser** and the **local** `connections.csv`, so it must run **on the user's machine**, not as a cloud agent. There are two different scheduled tasks - do not merge them.
+
+### Weekly (or on-demand): find companies and send requests
 
 - **Cowork scheduled task (runs locally).** Example task prompt: *"Use the LinkedIn Company Finder skill to find new companies. When that finishes, use the LinkedIn Connect Outreach skill to find the right person at each and draft notes. Give a short combined summary."*
 - **On-demand in Claude Code.** The user opens the project and says *"run my weekly outreach"*.
@@ -132,6 +135,13 @@ A scheduled run needs a **logged-in LinkedIn browser** and the **local** `connec
 **Ordering:** the finder must finish before outreach starts. A single chained task guarantees this. Outreach is idempotent and only touches rows without a persona.
 
 **Always required:** a logged-in LinkedIn session, the machine awake, and - while `confirm_before_first_send` is on - someone available to approve the batch. Without that approval a scheduled run correctly stops at drafts.
+
+### Daily: check for new acceptances and stage follow-ups
+
+A separate, much lighter task that should run **once a day**: it only checks who accepted a pending connection request and drafts the follow-up message for anything now due - it never finds new companies or sends new connection requests.
+
+- **Cowork scheduled task (runs locally, daily).** Example task prompt: *"Run Step 11 (the daily acceptance-check pass) of the LinkedIn Connect Outreach skill: check for newly accepted connections and draft any follow-ups now due. Do not find new companies or send new connection requests. Give a short summary."*
+- This never needs `confirm_before_first_send` - it does not send connection requests. Whether it needs to ask the user anything at all depends on `followup_auto_send` (see `RETARGETING.md`): when `false` (the default for this campaign), it only drafts and stages messages in the dashboard for the user to send by hand, so it can run fully unattended.
 
 ## Recognizing a settings change (read this - users speak casually)
 
@@ -172,6 +182,7 @@ If unsure, ask: "Do you want me to change your settings to X, or run with your c
 - **OS detection:** Windows -> `python` + `pip`. macOS/Linux -> `python3` + `pip3`.
 - All data stays local - no cloud, no database, no third-party API. Everything is in `connections.csv`.
 - The skills always write to `connections.csv` in the project root (one level above `dashboard/`).
+- **Humanizing drafted text:** the outreach skill's connection notes and follow-up messages are run through a skill named `humanizer` before saving, if one is available in the current environment (it is a personal Cowork skill of the user's, not bundled with this project - it may not be visible in every session, e.g. Claude Code). Its absence is never an error; the drafted text is saved as-is. Humanizing can change length, so the character limit is always re-checked afterward.
 
 ## File structure
 
@@ -183,10 +194,13 @@ If unsure, ask: "Do you want me to change your settings to X, or run with your c
 ├── outreach_config.example.json <- shipped default knobs (committed; the fallback)
 ├── outreach_config.json        <- live user settings (gitignored; skills load this)
 ├── seen_companies.txt          <- finder de-dup cache (gitignored)
+├── last_acceptance_check.json  <- daily acceptance-check cutoff date (gitignored)
+├── blocked_personas.txt        <- people who hit an unworkable wall (e.g. email verification) (gitignored)
 ├── setup_complete.json         <- per-machine setup marker (gitignored)
 ├── .claude/skills/             <- AUTHORITATIVE skills (auto-load in Claude Code)
 │   ├── linkedin-company-finder/   (SKILL.md + scripts/append_companies.py)
-│   └── linkedin-connect-outreach/ (SKILL.md + scripts/update_outreach.py)
+│   ├── linkedin-connect-outreach/ (SKILL.md + scripts/update_outreach.py)
+│   └── linkedin-message-accepted/ (SKILL.md only - reuses linkedin-connect-outreach's script)
 ├── dist/
 │   └── linkedin-connect-outreach.plugin  <- Cowork plugin (present for install)
 └── dashboard/

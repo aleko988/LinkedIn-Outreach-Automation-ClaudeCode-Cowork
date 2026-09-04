@@ -57,8 +57,27 @@ CANONICAL_COLUMNS = [
     "persona_tier",           # which contact tier matched (Founder, CEO, Head of X ...)
     "persona_location",
     "persona_mutuals",        # shared connections count, if visible
-    "connection_note",        # the <=200 character note actually sent
+    "persona2_name",          # optional SECOND contact at this company (personas_per_company > 1)
+    "persona2_title",
+    "persona2_linkedin",
+    "persona2_tier",
+    "persona2_note",          # <=200 char note drafted for the second contact
+    "persona2_connection_sent",        # Yes / No - second contact
+    "persona2_date_sent",              # YYYY-MM-DD - also drives the daily cap counter
+    "persona2_connection_result",      # Sent / Pending / Accepted / Ignored / Withdrawn / Failed
+    "persona2_note_sent_with_request", # Yes / No - whether persona2_note was actually included in
+                                        # the sent invite (counts against the monthly note quota)
+                                        # vs sent as a plain connect
+    "persona2_last_action_date",
+    "persona2_followup_1_message",
+    "persona2_followup_1_date",
+    "persona2_followup_2_message",
+    "persona2_followup_2_date",
+    "persona2_reply_status",  # No reply / Replied / Positive / Not interested - second contact
+    "connection_note",        # the <=200 character note drafted (may or may not be the one actually sent)
     "note_char_count",        # integer, validated by the helper script
+    "note_sent_with_request", # Yes / No - whether the note above was actually included in the sent
+                               # invite (counts against the monthly note quota) vs sent as a plain connect
     "connection_sent",        # Yes / No
     "date_sent",              # YYYY-MM-DD - also drives the daily cap counter
     "connection_result",      # Sent / Pending / Accepted / Ignored / Withdrawn / Failed
@@ -79,7 +98,13 @@ FINDER_COLUMNS = CANONICAL_COLUMNS[:CANONICAL_COLUMNS.index("outreach_status") +
 OUTREACH_COLUMNS = [
     "persona_name", "persona_title", "persona_linkedin", "persona_tier",
     "persona_location", "persona_mutuals",
-    "connection_note", "note_char_count", "connection_sent", "date_sent",
+    "persona2_name", "persona2_title", "persona2_linkedin", "persona2_tier", "persona2_note",
+    "persona2_connection_sent", "persona2_date_sent", "persona2_connection_result",
+    "persona2_note_sent_with_request", "persona2_last_action_date",
+    "persona2_followup_1_message", "persona2_followup_1_date",
+    "persona2_followup_2_message", "persona2_followup_2_date", "persona2_reply_status",
+    "connection_note", "note_char_count", "note_sent_with_request",
+    "connection_sent", "date_sent",
     "connection_result",
     "followup_1_message", "followup_1_date",
     "followup_2_message", "followup_2_date",

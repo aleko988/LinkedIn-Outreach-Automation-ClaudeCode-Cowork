@@ -13,13 +13,43 @@ It is also the SAFETY VALVE for the two things an agent must not get wrong:
      not truncated. The agent has to rewrite it shorter.
   2. The daily cap. --cap-check reports how many sends are still allowed today, counted
      from the CSV itself (rows whose date_sent is today). Run it BEFORE each send.
+  3. The monthly note quota (no LinkedIn Premium = a limited number of connection
+     requests per month may include a personalized note). --note-cap-check reports how
+     many note-sends remain this calendar month, counted from the CSV itself (rows with
+     note_sent_with_request=Yes whose date_sent is this month). --mark-sent REFUSES a
+     note-send once the quota is used - the row must go out as a plain connect instead
+     (--note-used no).
+
+It also tracks the **acceptance-check cutoff**: the date the daily acceptance-check pass
+last ran. --acceptance-check-status prints that cutoff (so the pass only reads LinkedIn's
+Connections page down to that date, sorted "Recently added", instead of scanning the
+user's entire connections list every day). --mark-checked advances it after a pass
+finishes. This state lives in last_acceptance_check.json next to connections.csv - it is
+bookkeeping, not outreach data, same category as seen_companies.txt.
+
+It also maintains blocked_personas.txt: profiles that hit a wall this project cannot work
+around (e.g. LinkedIn's "verify this member knows you" email gate) get remembered there via
+--block-persona, so they are never picked as a candidate again.
+
+A company can have a SECOND contact (persona2_* columns, used when personas_per_company > 1).
+--persona 2 on --mark-sent writes to persona2_connection_sent/persona2_date_sent/
+persona2_connection_result/persona2_note_sent_with_request/persona2_last_action_date instead
+of the primary persona_*/connection_* columns - it is a fully separate connection request
+against the SAME daily cap and monthly note quota, so --cap-check and --note-cap-check count
+both personas' sends together (a company where both were messaged today counts as 2).
 
 Modes:
 
   python update_outreach.py --cap-check
+  python update_outreach.py --note-cap-check
   python update_outreach.py --due-followups
+  python update_outreach.py --acceptance-check-status
+  python update_outreach.py --mark-checked [--as-of YYYY-MM-DD]
+  python update_outreach.py --block-persona PROFILE_URL
+  python update_outreach.py --company_id acme --block-persona PROFILE_URL --data '{"persona_name": "", ...}'
+  python update_outreach.py --company_id acme --persona 2 --mark-sent [--note-used yes|no]
   python update_outreach.py --company_id acme --data JSON_OBJECT
-  python update_outreach.py --company_id acme --mark-sent
+  python update_outreach.py --company_id acme --mark-sent [--note-used yes|no]
   python update_outreach.py --company_id acme --followup 1 --message TEXT
   python update_outreach.py --company_id acme --result Accepted
   python update_outreach.py --company_id acme --delete
@@ -105,8 +135,101 @@ def write_rows(csv_path: str, fieldnames, rows):
 
 
 def sent_today(rows) -> int:
+    """Count sends today against the daily cap - a company where BOTH the primary and
+    second persona were messaged today counts as 2, since each is its own connection
+    request against the same LinkedIn account limit."""
     today = date.today().isoformat()
-    return sum(1 for r in rows if (r.get("date_sent") or "").strip() == today)
+    count = 0
+    for r in rows:
+        if (r.get("date_sent") or "").strip() == today:
+            count += 1
+        if (r.get("persona2_date_sent") or "").strip() == today:
+            count += 1
+    return count
+
+
+def blocked_personas_path(root: str) -> str:
+    return os.path.join(root, "blocked_personas.txt")
+
+
+def normalize_profile_path(url: str) -> str:
+    """Reduce a LinkedIn profile URL to its /in/<slug> path, lowercased, so the
+    blocklist matches regardless of query params or https/www variations."""
+    u = (url or "").strip().lower()
+    idx = u.find("/in/")
+    if idx == -1:
+        return u
+    rest = u[idx:]
+    return rest.split("?")[0].rstrip("/")
+
+
+def block_persona(root: str, profile_url: str) -> None:
+    """Remember a profile that hit a wall this project cannot work around (e.g. LinkedIn's
+    'verify this member knows you' email gate), so it is never picked as a candidate again.
+    Bookkeeping only, like seen_companies.txt - not outreach data.
+    """
+    path = normalize_profile_path(profile_url)
+    if not path:
+        return
+    existing = set()
+    p = blocked_personas_path(root)
+    if os.path.exists(p):
+        with open(p, encoding="utf-8") as f:
+            existing = {line.strip() for line in f if line.strip()}
+    if path not in existing:
+        with open(p, "a", encoding="utf-8") as f:
+            f.write(path + "\n")
+
+
+def acceptance_check_state_path(root: str) -> str:
+    return os.path.join(root, "last_acceptance_check.json")
+
+
+def read_last_checked_date(root: str, rows) -> str:
+    """The cutoff date for the daily acceptance-check pass: everyone on the Connections
+    page dated on or before this can be skipped, since they were already seen last time.
+
+    Falls back to the earliest date_sent in the tracker (never miss the very first batch
+    ever sent) or, if nothing has been sent yet, to today.
+    """
+    state_path = acceptance_check_state_path(root)
+    if os.path.exists(state_path):
+        try:
+            with open(state_path, encoding="utf-8") as f:
+                data = json.load(f)
+            v = (data.get("last_checked_date") or "").strip()
+            if v:
+                return v
+        except (ValueError, OSError):
+            pass
+    all_dates = [(r.get("date_sent") or "").strip() for r in rows]
+    all_dates += [(r.get("persona2_date_sent") or "").strip() for r in rows]
+    sent_dates = sorted(d for d in all_dates if d)
+    return sent_dates[0] if sent_dates else date.today().isoformat()
+
+
+def write_last_checked_date(root: str, as_of: str) -> None:
+    with open(acceptance_check_state_path(root), "w", encoding="utf-8") as f:
+        json.dump({"last_checked_date": as_of}, f)
+
+
+def notes_sent_this_month(rows) -> int:
+    """Count connection requests actually sent WITH a personalized note this
+    calendar month - this is what LinkedIn's free-plan monthly note quota limits.
+    A drafted-but-unsent note, or a note sent as part of a plain (no-note) connect,
+    does not count. Checked for both the primary and second persona - each is its
+    own connection request against the same monthly quota.
+    """
+    ym = date.today().strftime("%Y-%m")
+    count = 0
+    for r in rows:
+        if ((r.get("note_sent_with_request") or "").strip() == "Yes"
+                and (r.get("date_sent") or "").strip().startswith(ym)):
+            count += 1
+        if ((r.get("persona2_note_sent_with_request") or "").strip() == "Yes"
+                and (r.get("persona2_date_sent") or "").strip().startswith(ym)):
+            count += 1
+    return count
 
 
 def check_note(note: str, limit: int, field: str) -> int:
@@ -130,15 +253,39 @@ def main():
     parser.add_argument("--note", help="Shorthand for setting connection_note only")
     parser.add_argument("--mark-sent", action="store_true",
                         help="Record that the connection request was actually sent now.")
+    parser.add_argument("--persona", choices=["1", "2"], default="1",
+                        help="Which contact at this company --mark-sent applies to (default: 1, "
+                             "the primary persona_* fields). '2' writes to the persona2_* send "
+                             "fields instead, for companies with a second contact.")
+    parser.add_argument("--note-used", choices=["yes", "no"],
+                        help="With --mark-sent: whether the drafted note was actually included in "
+                             "the sent invite (counts against the monthly note quota) or it went out "
+                             "as a plain connect. Defaults to 'yes' if a connection_note is present, "
+                             "'no' otherwise - pass explicitly to send a plain connect despite having "
+                             "a drafted note on file.")
     parser.add_argument("--result",
                         help="Set connection_result (Sent/Pending/Accepted/Ignored/Withdrawn/Failed)")
     parser.add_argument("--followup", type=int, choices=[1, 2], help="Record follow-up 1 or 2")
     parser.add_argument("--message", help="The follow-up message text (use with --followup)")
     parser.add_argument("--delete", action="store_true", help="Delete this row")
+    parser.add_argument("--block-persona",
+                        help="Profile URL of a person who should never be picked as a candidate "
+                             "again (e.g. hit LinkedIn's email-verification wall). Appends to "
+                             "blocked_personas.txt. Can be combined with --data to also clear "
+                             "this row's persona fields so the company gets retried with someone "
+                             "else on the next run.")
     parser.add_argument("--cap-check", action="store_true",
                         help="Print how many more requests may be sent today, then exit.")
+    parser.add_argument("--note-cap-check", action="store_true",
+                        help="Print how many personalized-note sends remain this month, then exit.")
     parser.add_argument("--due-followups", action="store_true",
                         help="List accepted connections whose follow-up is due, then exit.")
+    parser.add_argument("--acceptance-check-status", action="store_true",
+                        help="Print the cutoff date for the daily acceptance-check pass, then exit.")
+    parser.add_argument("--mark-checked", action="store_true",
+                        help="Advance the acceptance-check cutoff (default: today), then exit.")
+    parser.add_argument("--as-of", help="With --mark-checked: the date to set as the new cutoff "
+                                         "(default: today). Format YYYY-MM-DD.")
     parser.add_argument("--print-root", action="store_true",
                         help="Print the auto-located project root and exit.")
     args = parser.parse_args()
@@ -153,6 +300,7 @@ def main():
     note_limit = int(cfg.get("note_char_limit", getattr(schema, "NOTE_CHAR_LIMIT", 200)))
     followup_limit = int(cfg.get("followup_char_limit", 400))
     cap = int(cfg.get("daily_connection_cap", 15))
+    note_cap = int(cfg.get("note_monthly_limit", 5))
 
     if not os.path.exists(args.csv):
         print(f"Error: master CSV not found at {args.csv}", file=sys.stderr)
@@ -171,43 +319,105 @@ def main():
                   file=sys.stderr)
         return
 
+    # ---------- NOTE CAP CHECK (monthly) ----------
+    if args.note_cap_check:
+        used = notes_sent_this_month(rows)
+        remaining = max(0, note_cap - used)
+        print(json.dumps({"note_cap": note_cap, "notes_used_this_month": used,
+                           "notes_remaining": remaining}))
+        if remaining == 0:
+            print("Monthly note quota used up. Draft the note as usual for the record, but "
+                  "send this and every remaining request as a PLAIN connect (no note) until "
+                  "next month - pass --note-used no with --mark-sent.", file=sys.stderr)
+        return
+
     # ---------- DUE FOLLOW-UPS ----------
     if args.due_followups:
         d1 = int(cfg.get("followup_1_days", 3))
         d2 = int(cfg.get("followup_2_days", 8))
-        due = []
-        for r in rows:
-            if (r.get("connection_result") or "").strip() != "Accepted":
-                continue
-            if (r.get("reply_status") or "").strip() in ("Replied", "Positive", "Not interested"):
-                continue
-            sent = (r.get("date_sent") or "").strip()
+
+        def due_for_persona(r, p):
+            """p is '1' (primary) or '2' (second contact) - checks that persona's own
+            acceptance/reply/followup state independently."""
+            prefix = "persona2_" if p == "2" else ""
+            result_field = f"{prefix}connection_result"
+            sent_field = f"{prefix}date_sent"
+            note_used_field = f"{prefix}note_sent_with_request"
+            f1_date_field = f"{prefix}followup_1_date"
+            f2_date_field = f"{prefix}followup_2_date"
+            reply_field = f"{prefix}reply_status"
+            name_field = f"{prefix}name" if p == "2" else "persona_name"
+            linkedin_field = f"{prefix}linkedin" if p == "2" else "persona_linkedin"
+
+            if p == "2" and not (r.get("persona2_name") or "").strip():
+                return None
+            if (r.get(result_field) or "").strip() != "Accepted":
+                return None
+            if (r.get(reply_field) or "").strip() in ("Replied", "Positive", "Not interested"):
+                return None
+            sent = (r.get(sent_field) or "").strip()
             if not sent:
-                continue
+                return None
             try:
                 sent_d = datetime.strptime(sent, "%Y-%m-%d").date()
             except ValueError:
-                continue
+                return None
             age = (date.today() - sent_d).days
-            has_f1 = bool((r.get("followup_1_date") or "").strip())
-            has_f2 = bool((r.get("followup_2_date") or "").strip())
+            has_f1 = bool((r.get(f1_date_field) or "").strip())
+            has_f2 = bool((r.get(f2_date_field) or "").strip())
+            note_was_used = (r.get(note_used_field) or "").strip() == "Yes"
             which = None
-            if not has_f1 and age >= d1:
-                which = 1
+            if not has_f1:
+                # They accepted a PLAIN connect (no note delivered at request time) - message
+                # them now instead of waiting followup_1_days, since they never got the
+                # personalized content at all.
+                if age >= d1 or not note_was_used:
+                    which = 1
             elif has_f1 and not has_f2 and age >= d2:
                 which = 2
-            if which:
-                due.append({"company_id": r.get("company_id"),
-                            "company_name": r.get("company_name"),
-                            "persona_name": r.get("persona_name"),
-                            "persona_linkedin": r.get("persona_linkedin"),
-                            "followup": which,
-                            "days_since_sent": age})
+            if not which:
+                return None
+            return {"company_id": r.get("company_id"), "company_name": r.get("company_name"),
+                    "persona": p, "persona_name": r.get(name_field),
+                    "persona_linkedin": r.get(linkedin_field), "followup": which,
+                    "days_since_sent": age, "immediate_no_note": which == 1 and not note_was_used}
+
+        due = []
+        for r in rows:
+            for p in ("1", "2"):
+                entry = due_for_persona(r, p)
+                if entry:
+                    due.append(entry)
         print(json.dumps(due, indent=2))
         return
 
+    # ---------- ACCEPTANCE-CHECK CUTOFF (read) ----------
+    if args.acceptance_check_status:
+        cutoff = read_last_checked_date(root, rows)
+        print(json.dumps({"last_checked_date": cutoff}))
+        print(f"Read the Connections page sorted by 'Recently added' and stop as soon as you "
+              f"reach someone connected on or before {cutoff} - everyone above that on the "
+              f"page is new since the last check.", file=sys.stderr)
+        return
+
+    # ---------- ACCEPTANCE-CHECK CUTOFF (advance) ----------
+    if args.mark_checked:
+        as_of = args.as_of or today
+        write_last_checked_date(root, as_of)
+        print(f"Done. Acceptance-check cutoff advanced to {as_of}.")
+        return
+
+    # ---------- BLOCK A PERSONA (standalone, or combined with --company_id/--data below) ----------
+    if args.block_persona:
+        block_persona(root, args.block_persona)
+        if not args.company_id:
+            print(f"Done. Blocked persona: {normalize_profile_path(args.block_persona)}")
+            return
+        # else: fall through - the caller is also clearing this row's persona fields via --data
+
     if not args.company_id:
-        print("Error: --company_id is required (unless --cap-check / --due-followups / "
+        print("Error: --company_id is required (unless --cap-check / --note-cap-check / "
+              "--due-followups / --acceptance-check-status / --mark-checked / --block-persona / "
               "--print-root)", file=sys.stderr)
         sys.exit(1)
 
@@ -246,15 +456,18 @@ def main():
     if args.note:
         updates["connection_note"] = args.note
 
-    # ---------- FOLLOW-UP ----------
+    # ---------- FOLLOW-UP (primary or persona2) ----------
     if args.followup:
         if not args.message:
             print("Error: --followup requires --message", file=sys.stderr)
             sys.exit(1)
-        check_note(args.message, followup_limit, f"followup_{args.followup}_message")
-        updates[f"followup_{args.followup}_message"] = args.message
-        updates[f"followup_{args.followup}_date"] = today
-        updates["last_action_date"] = today
+        fu_prefix = "persona2_" if args.persona == "2" else ""
+        fu_msg_field = f"{fu_prefix}followup_{args.followup}_message"
+        fu_date_field = f"{fu_prefix}followup_{args.followup}_date"
+        check_note(args.message, followup_limit, fu_msg_field)
+        updates[fu_msg_field] = args.message
+        updates[fu_date_field] = today
+        updates[f"{fu_prefix}last_action_date" if fu_prefix else "last_action_date"] = today
 
     # ---------- NOTE LENGTH GUARDRAIL ----------
     if "connection_note" in updates:
@@ -263,25 +476,54 @@ def main():
         if (target.get("outreach_status") or "").strip() not in ("Request sent", "Accepted", "Replied"):
             updates.setdefault("outreach_status", "Note drafted")
 
-    # ---------- MARK SENT (cap-enforced) ----------
+    # ---------- MARK SENT (daily-cap and monthly-note-cap enforced, primary or persona2) ----------
     if args.mark_sent:
-        note = str(updates.get("connection_note") or target.get("connection_note") or "").strip()
-        if not note:
-            print("Error: cannot mark sent - this row has no connection_note yet.",
+        is_p2 = args.persona == "2"
+        note_field = "persona2_note" if is_p2 else "connection_note"
+        sent_field = "persona2_connection_sent" if is_p2 else "connection_sent"
+        date_field = "persona2_date_sent" if is_p2 else "date_sent"
+        result_field = "persona2_connection_result" if is_p2 else "connection_result"
+        note_used_field = "persona2_note_sent_with_request" if is_p2 else "note_sent_with_request"
+        last_action_field = "persona2_last_action_date" if is_p2 else "last_action_date"
+
+        # A connection may go out as a plain connect (no note) once the monthly note
+        # quota is used up - a drafted note staying on file for the record is fine,
+        # it just was not the thing actually sent. --note-used decides which happened;
+        # if omitted, infer it from whether a note is present.
+        note = str(updates.get(note_field) or target.get(note_field) or "").strip()
+        if note:
+            check_note(note, note_limit, note_field)
+        note_used = args.note_used if args.note_used else ("yes" if note else "no")
+        if note_used == "yes" and not note:
+            print(f"Error: --note-used yes but this row has no {note_field} to send.",
                   file=sys.stderr)
             sys.exit(1)
-        check_note(note, note_limit, "connection_note")
+
         used = sent_today(rows)
-        already_today = (target.get("date_sent") or "").strip() == today
+        already_today = (target.get(date_field) or "").strip() == today
         if not already_today and used >= cap:
             print(f"REFUSING: daily cap of {cap} requests already reached ({used} sent today). "
                   f"Stop sending and report back to the user.", file=sys.stderr)
             sys.exit(2)
-        updates["connection_sent"] = "Yes"
-        updates["date_sent"] = today
-        updates["connection_result"] = args.result or "Sent"
-        updates["outreach_status"] = "Request sent"
-        updates["last_action_date"] = today
+
+        if note_used == "yes":
+            already_counted_this_send = (target.get(note_used_field) or "").strip() == "Yes" and already_today
+            notes_used = notes_sent_this_month(rows)
+            if not already_counted_this_send and notes_used >= note_cap:
+                print(f"REFUSING: monthly note quota of {note_cap} already reached "
+                      f"({notes_used} sent this month). Send this one as a plain connect instead: "
+                      f"re-run with --note-used no.", file=sys.stderr)
+                sys.exit(2)
+
+        updates[sent_field] = "Yes"
+        updates[date_field] = today
+        updates[result_field] = args.result or "Sent"
+        updates[note_used_field] = "Yes" if note_used == "yes" else "No"
+        updates[last_action_field] = today
+        if not is_p2:
+            # No per-persona outreach_status column exists for persona2 - the shared
+            # outreach_status only reflects the primary persona's progress.
+            updates["outreach_status"] = "Request sent"
     elif args.result:
         updates["connection_result"] = args.result
         updates["last_action_date"] = today
@@ -301,7 +543,7 @@ def main():
 
     tail = ""
     if args.mark_sent:
-        tail = f" | Sent today: {sent_today(rows)}/{cap}"
+        tail = f" | Sent today: {sent_today(rows)}/{cap} | Notes this month: {notes_sent_this_month(rows)}/{note_cap}"
     print(f"Done. Updated company_id={company_id} | Fields: {', '.join(updates.keys())}{tail} "
           f"| CSV: {args.csv}")
 

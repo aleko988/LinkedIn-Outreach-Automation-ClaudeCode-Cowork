@@ -59,8 +59,10 @@ _OUTREACH_KNOBS = [
     ("persona_tiers",         "Persona priority", "bi-person-lines-fill"),
     ("personas_per_company",  "People per company", "bi-people"),
     ("note_char_limit",       "Note limit",       "bi-textarea-t"),
+    ("note_monthly_limit",    "Note budget/mo",   "bi-envelope-paper"),
     ("daily_connection_cap",  "Daily cap",        "bi-speedometer2"),
     ("note_tone",             "Note tone",        "bi-chat-quote"),
+    ("followup_auto_send",    "Follow-up sending", "bi-send"),
     ("followup_1_days",       "Follow-up 1",      "bi-arrow-repeat"),
     ("followup_2_days",       "Follow-up 2",      "bi-arrow-repeat"),
 ]
@@ -157,8 +159,10 @@ def config_limits():
     return {
         "note_char_limit": int(o.get("note_char_limit", 200)),
         "daily_cap": int(o.get("daily_connection_cap", 15)),
+        "note_monthly_cap": int(o.get("note_monthly_limit", 5)),
         "followup_1_days": int(o.get("followup_1_days", 3)),
         "followup_2_days": int(o.get("followup_2_days", 8)),
+        "followup_auto_send": bool(o.get("followup_auto_send", False)),
     }
 
 
@@ -209,27 +213,65 @@ def days_since(value):
         return None
 
 
-def followup_due(row, limits):
-    """Which follow-up (1, 2 or None) this accepted connection is waiting on."""
-    if (row.get("connection_result") or "").strip() != "Accepted":
+def _followup_due_generic(row, limits, prefix):
+    """Which follow-up (1, 2 or None) this accepted connection is waiting on.
+    prefix is "" for the primary persona or "persona2_" for the second contact.
+    A plain connect (no note delivered at request time) is due for follow-up 1
+    immediately, regardless of followup_1_days - see update_outreach.py's
+    --due-followups for the matching script-side logic.
+    """
+    if (row.get(f"{prefix}connection_result") or "").strip() != "Accepted":
         return None
-    if (row.get("reply_status") or "No reply").strip() != "No reply":
+    if (row.get(f"{prefix}reply_status") or "No reply").strip() != "No reply":
         return None
-    age = days_since(row.get("date_sent"))
+    age = days_since(row.get(f"{prefix}date_sent"))
     if age is None:
         return None
-    has_f1 = bool((row.get("followup_1_date") or "").strip())
-    has_f2 = bool((row.get("followup_2_date") or "").strip())
-    if not has_f1 and age >= limits["followup_1_days"]:
+    has_f1 = bool((row.get(f"{prefix}followup_1_date") or "").strip())
+    has_f2 = bool((row.get(f"{prefix}followup_2_date") or "").strip())
+    note_was_used = (row.get(f"{prefix}note_sent_with_request") or "").strip() == "Yes"
+    if not has_f1 and (age >= limits["followup_1_days"] or not note_was_used):
         return 1
     if has_f1 and not has_f2 and age >= limits["followup_2_days"]:
         return 2
     return None
 
 
+def followup_due(row, limits):
+    return _followup_due_generic(row, limits, "")
+
+
+def followup_due2(row, limits):
+    if not (row.get("persona2_name") or "").strip():
+        return None
+    return _followup_due_generic(row, limits, "persona2_")
+
+
 def sent_today_count(rows):
+    """Counts each persona's send separately - a company where both the primary and
+    second persona were messaged today counts as 2, matching update_outreach.py's
+    daily-cap accounting."""
     today = date.today().isoformat()
-    return sum(1 for r in rows if (r.get("date_sent") or "").strip() == today)
+    count = 0
+    for r in rows:
+        if (r.get("date_sent") or "").strip() == today:
+            count += 1
+        if (r.get("persona2_date_sent") or "").strip() == today:
+            count += 1
+    return count
+
+
+def notes_sent_this_month_count(rows):
+    ym = date.today().strftime("%Y-%m")
+    count = 0
+    for r in rows:
+        if ((r.get("note_sent_with_request") or "").strip() == "Yes"
+                and (r.get("date_sent") or "").strip().startswith(ym)):
+            count += 1
+        if ((r.get("persona2_note_sent_with_request") or "").strip() == "Yes"
+                and (r.get("persona2_date_sent") or "").strip().startswith(ym)):
+            count += 1
+    return count
 
 
 def row_matches(row, query):
@@ -468,6 +510,8 @@ INDEX_HTML = BASE_HTML.replace("{% block content %}{% endblock %}", """
     <div class="stat-label">Replied</div><div class="stat-sub">conversations started</div></div>
   <div class="stat-cell stat-highlight"><div class="stat-value">{{ stats.remaining }}</div>
     <div class="stat-label">Left today</div><div class="stat-sub">{{ stats.sent_today }} of {{ stats.cap }} used</div></div>
+  <div class="stat-cell"><div class="stat-value">{{ stats.notes_remaining }}</div>
+    <div class="stat-label">Notes left</div><div class="stat-sub">{{ stats.notes_used_month }} of {{ stats.note_cap }} this month</div></div>
 </div>
 
 <div class="tabnav mb-4">
@@ -527,6 +571,12 @@ INDEX_HTML = BASE_HTML.replace("{% block content %}{% endblock %}", """
             <div class="c-sub">{{ r.persona_title }}</div>
             {% if r.persona_tier %}<span class="c-tier">{{ r.persona_tier }}</span>{% endif %}
           {% else %}<span class="c-sub">not found yet</span>{% endif %}
+          {% if r.persona2_name %}
+            <hr class="my-1">
+            <div class="c-persona">{{ r.persona2_name }}</div>
+            <div class="c-sub">{{ r.persona2_title }}</div>
+            {% if r.persona2_tier %}<span class="c-tier">{{ r.persona2_tier }}</span>{% endif %}
+          {% endif %}
         </td>
         <td>
           {% if r.connection_sent == 'Yes' %}
@@ -537,6 +587,17 @@ INDEX_HTML = BASE_HTML.replace("{% block content %}{% endblock %}", """
           {% elif r.connection_note %}
             <span class="no-pill">Drafted</span>
           {% else %}<span class="no-pill">No</span>{% endif %}
+          {% if r.persona2_name %}
+            <hr class="my-1">
+            {% if r.persona2_connection_sent == 'Yes' %}
+              <span class="yes-pill">Yes</span>
+              <div class="c-sub mt-1">{{ r.persona2_date_sent }}</div>
+              {% if r.persona2_connection_result and r.persona2_connection_result != 'Sent' %}
+                <div class="c-sub">{{ r.persona2_connection_result }}</div>{% endif %}
+            {% elif r.persona2_note %}
+              <span class="no-pill">Drafted</span>
+            {% else %}<span class="no-pill">No</span>{% endif %}
+          {% endif %}
         </td>
         <td>
           {% if r._followup_due %}
@@ -551,6 +612,21 @@ INDEX_HTML = BASE_HTML.replace("{% block content %}{% endblock %}", """
           {% elif r.connection_note %}
             <div class="note-cell">{{ r.connection_note }}</div>
           {% else %}<span class="c-sub">-</span>{% endif %}
+          {% if r.persona2_name %}
+            <hr class="my-1">
+            {% if r._followup_due2 %}
+              <span class="due-pill">Follow-up {{ r._followup_due2 }} due</span>
+              <div class="c-sub mt-1">{{ r._age2 }} days since sent</div>
+            {% elif r.persona2_followup_2_date %}
+              <div class="c-sub">2 sent, last {{ r.persona2_followup_2_date }}</div>
+            {% elif r.persona2_followup_1_date %}
+              <div class="c-sub">1 sent {{ r.persona2_followup_1_date }}</div>
+            {% elif r.persona2_reply_status and r.persona2_reply_status != 'No reply' %}
+              <span class="yes-pill">{{ r.persona2_reply_status }}</span>
+            {% elif r.persona2_note %}
+              <div class="note-cell">{{ r.persona2_note }}</div>
+            {% else %}<span class="c-sub">-</span>{% endif %}
+          {% endif %}
         </td>
       </tr>
     {% endfor %}
@@ -614,21 +690,83 @@ DETAIL_HTML = BASE_HTML.replace("{% block content %}{% endblock %}", """
           <div class="d-flex align-items-center gap-3">
             <span class="char-count {% if note_len > limits.note_char_limit %}over{% endif %}">
               {{ note_len }} / {{ limits.note_char_limit }} characters</span>
-            <button class="copy-btn" onclick="copyText({{ r.connection_note|tojson }}, this)">
-              <i class="bi bi-clipboard"></i> Copy</button>
+            {% if r.connection_sent == 'Yes' %}
+              {% if r.note_sent_with_request == 'Yes' %}<span class="yes-pill">Sent with this note</span>
+              {% else %}<span class="no-pill">Sent as plain connect (note not used)</span>{% endif %}
+            {% else %}
+              <button class="copy-btn" onclick="copyText({{ r.connection_note|tojson }}, this)">
+                <i class="bi bi-clipboard"></i> Copy</button>
+            {% endif %}
           </div>
         {% else %}<div class="c-sub my-3">No note drafted yet.</div>{% endif %}
       {% else %}
         <div class="c-sub">No persona found yet. The outreach skill picks this up on the next run.</div>
       {% endif %}
 
+      {% if r.persona2_name %}
+        <hr>
+        <div class="mb-2">
+          <span class="c-persona fw-semibold">{{ r.persona2_name }}</span>
+          {% if r.persona2_tier %}<span class="c-tier ms-2">{{ r.persona2_tier }}</span>{% endif %}
+          <div class="c-sub">{{ r.persona2_title }}</div>
+          {% if r.persona2_linkedin %}<a href="{{ r.persona2_linkedin }}" target="_blank"
+            class="text-decoration-none c-sub"><i class="bi bi-linkedin"></i> Open profile</a>{% endif %}
+        </div>
+        {% if r.persona2_note %}
+          <div class="note-box my-3">{{ r.persona2_note }}</div>
+          <div class="d-flex align-items-center gap-3">
+            <span class="char-count {% if persona2_note_len > limits.note_char_limit %}over{% endif %}">
+              {{ persona2_note_len }} / {{ limits.note_char_limit }} characters</span>
+            {% if r.persona2_connection_sent == 'Yes' %}
+              {% if r.persona2_note_sent_with_request == 'Yes' %}<span class="yes-pill">Sent with this note</span>
+              {% else %}<span class="no-pill">Sent as plain connect (note not used)</span>{% endif %}
+            {% else %}
+              <button class="copy-btn" onclick="copyText({{ r.persona2_note|tojson }}, this)">
+                <i class="bi bi-clipboard"></i> Copy</button>
+            {% endif %}
+          </div>
+        {% else %}<div class="c-sub my-3">No note drafted yet for the second contact.</div>{% endif %}
+      {% endif %}
+
       {% if r.followup_1_message %}
         <hr><div class="panel-label">Follow-up 1 - {{ r.followup_1_date }}</div>
         <div class="note-box mt-2">{{ r.followup_1_message }}</div>
+        <div class="d-flex align-items-center gap-3 mt-2">
+          {% if limits.followup_auto_send %}<span class="yes-pill">Sent automatically</span>
+          {% else %}<span class="c-sub">Ready to send yourself</span>
+          <button class="copy-btn" onclick="copyText({{ r.followup_1_message|tojson }}, this)">
+            <i class="bi bi-clipboard"></i> Copy</button>{% endif %}
+        </div>
       {% endif %}
       {% if r.followup_2_message %}
         <hr><div class="panel-label">Follow-up 2 - {{ r.followup_2_date }}</div>
         <div class="note-box mt-2">{{ r.followup_2_message }}</div>
+        <div class="d-flex align-items-center gap-3 mt-2">
+          {% if limits.followup_auto_send %}<span class="yes-pill">Sent automatically</span>
+          {% else %}<span class="c-sub">Ready to send yourself</span>
+          <button class="copy-btn" onclick="copyText({{ r.followup_2_message|tojson }}, this)">
+            <i class="bi bi-clipboard"></i> Copy</button>{% endif %}
+        </div>
+      {% endif %}
+      {% if r.persona2_followup_1_message %}
+        <hr><div class="panel-label">{{ r.persona2_name }} - Follow-up 1 - {{ r.persona2_followup_1_date }}</div>
+        <div class="note-box mt-2">{{ r.persona2_followup_1_message }}</div>
+        <div class="d-flex align-items-center gap-3 mt-2">
+          {% if limits.followup_auto_send %}<span class="yes-pill">Sent automatically</span>
+          {% else %}<span class="c-sub">Ready to send yourself</span>
+          <button class="copy-btn" onclick="copyText({{ r.persona2_followup_1_message|tojson }}, this)">
+            <i class="bi bi-clipboard"></i> Copy</button>{% endif %}
+        </div>
+      {% endif %}
+      {% if r.persona2_followup_2_message %}
+        <hr><div class="panel-label">{{ r.persona2_name }} - Follow-up 2 - {{ r.persona2_followup_2_date }}</div>
+        <div class="note-box mt-2">{{ r.persona2_followup_2_message }}</div>
+        <div class="d-flex align-items-center gap-3 mt-2">
+          {% if limits.followup_auto_send %}<span class="yes-pill">Sent automatically</span>
+          {% else %}<span class="c-sub">Ready to send yourself</span>
+          <button class="copy-btn" onclick="copyText({{ r.persona2_followup_2_message|tojson }}, this)">
+            <i class="bi bi-clipboard"></i> Copy</button>{% endif %}
+        </div>
       {% endif %}
     </div>
   </div>
@@ -655,6 +793,10 @@ DETAIL_HTML = BASE_HTML.replace("{% block content %}{% endblock %}", """
       {% if r._followup_due %}
         <hr><span class="due-pill">Follow-up {{ r._followup_due }} due</span>
         <div class="c-sub mt-2">Sent {{ r._age }} days ago, no reply yet.</div>
+      {% endif %}
+      {% if r._followup_due2 %}
+        <hr><span class="due-pill">{{ r.persona2_name }} - Follow-up {{ r._followup_due2 }} due</span>
+        <div class="c-sub mt-2">Sent {{ r._age2 }} days ago, no reply yet.</div>
       {% endif %}
     </div>
   </div>
@@ -694,14 +836,50 @@ def _sent(r):
     return (r.get("connection_sent") or "").strip() == "Yes"
 
 
+def _sent2(r):
+    return (r.get("persona2_connection_sent") or "").strip() == "Yes"
+
+
+def _has_persona2(r):
+    return bool((r.get("persona2_name") or "").strip())
+
+
+def _accepted_prefixes(r):
+    """Which persona slots ('' = primary, 'persona2_' = second contact) are Accepted."""
+    out = []
+    if (r.get("connection_result") or "").strip() == "Accepted":
+        out.append("")
+    if _has_persona2(r) and (r.get("persona2_connection_result") or "").strip() == "Accepted":
+        out.append("persona2_")
+    return out
+
+
+def _has_any_accepted(r):
+    return bool(_accepted_prefixes(r))
+
+
+def _has_message(r, prefix):
+    return bool((r.get(f"{prefix}followup_1_message") or "").strip())
+
+
+def _accepted_no_message(r):
+    return any(not _has_message(r, p) for p in _accepted_prefixes(r))
+
+
+def _accepted_messaged(r):
+    return any(_has_message(r, p) for p in _accepted_prefixes(r))
+
+
 TAB_FILTERS = {
-    "Needs a person": lambda r, l: not _has_persona(r),
-    "Ready to send":  lambda r, l: _has_persona(r) and (r.get("connection_note") or "").strip() and not _sent(r),
-    "Sent":           lambda r, l: _sent(r) and (r.get("connection_result") or "") in ("Sent", "Pending", ""),
-    "Accepted":       lambda r, l: (r.get("connection_result") or "") == "Accepted",
-    "Follow up due":  lambda r, l: followup_due(r, l) is not None,
-    "Replied":        lambda r, l: (r.get("reply_status") or "No reply") not in ("No reply", ""),
-    "All":            lambda r, l: True,
+    "Needs a person":      lambda r, l: not _has_persona(r),
+    "Ready to send":       lambda r, l: _has_persona(r) and (r.get("connection_note") or "").strip() and not _sent(r),
+    "Sent":                lambda r, l: _sent(r) and (r.get("connection_result") or "") in ("Sent", "Pending", ""),
+    "Accepted":            lambda r, l: _has_any_accepted(r),
+    "Awaiting message":    lambda r, l: _accepted_no_message(r),
+    "Messaged":            lambda r, l: _accepted_messaged(r),
+    "Follow up due":       lambda r, l: followup_due(r, l) is not None or followup_due2(r, l) is not None,
+    "Replied":             lambda r, l: (r.get("reply_status") or "No reply") not in ("No reply", "") or (r.get("persona2_reply_status") or "No reply") not in ("No reply", ""),
+    "All":                 lambda r, l: True,
 }
 
 
@@ -724,6 +902,8 @@ def index():
     for r in rows:
         r["_followup_due"] = followup_due(r, limits)
         r["_age"] = days_since(r.get("date_sent"))
+        r["_followup_due2"] = followup_due2(r, limits)
+        r["_age2"] = days_since(r.get("persona2_date_sent"))
 
     buckets = {}
     for r in rows:
@@ -736,6 +916,7 @@ def index():
     replied = sum(1 for r in all_rows
                   if (r.get("reply_status") or "No reply") not in ("No reply", ""))
     used = sent_today_count(all_rows)
+    notes_used = notes_sent_this_month_count(all_rows)
     stats = {
         "companies": len(all_rows),
         "sent": sent,
@@ -745,6 +926,9 @@ def index():
         "cap": limits["daily_cap"],
         "sent_today": used,
         "remaining": max(0, limits["daily_cap"] - used),
+        "note_cap": limits["note_monthly_cap"],
+        "notes_used_month": notes_used,
+        "notes_remaining": max(0, limits["note_monthly_cap"] - notes_used),
     }
 
     cfg_rows, cfg_meta = campaign_config_summary()
@@ -763,8 +947,11 @@ def company_detail(company_id):
         abort(404)
     r["_followup_due"] = followup_due(r, limits)
     r["_age"] = days_since(r.get("date_sent"))
+    r["_followup_due2"] = followup_due2(r, limits)
+    r["_age2"] = days_since(r.get("persona2_date_sent"))
     return render_template_string(DETAIL_HTML, r=r, limits=limits,
                                   note_len=len((r.get("connection_note") or "")),
+                                  persona2_note_len=len((r.get("persona2_note") or "")),
                                   statuses=STATUSES, results=RESULTS, replies=REPLIES,
                                   status_colors=STATUS_COLORS, request=request)
 

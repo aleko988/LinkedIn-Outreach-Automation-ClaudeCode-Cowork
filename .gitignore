@@ -1,6 +1,8 @@
 # Personal data - never commit
 connections.csv
 seen_companies.txt
+last_acceptance_check.json
+blocked_personas.txt
 
 # Live campaign targeting (the user's current settings). Gitignored so personal
 # targeting never ships; a fresh clone falls back to outreach_config.example.json.
