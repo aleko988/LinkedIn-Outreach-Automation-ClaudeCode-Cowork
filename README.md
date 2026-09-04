@@ -72,7 +72,7 @@ outreach_config.json           your live campaign settings
 outreach_config.example.json   the shipped default
 CLAUDE.md                      how the agent should work in this project
 RETARGETING.md                 how to change or add a setting
-.claude/skills/                the two skills (authoritative)
+.claude/skills/                the three skills (authoritative)
 dashboard/app.py               the Flask dashboard, port 5002
 dist/*.plugin                  the Cowork plugin (thin launchers)
 ```
