@@ -564,6 +564,13 @@ INDEX_HTML = BASE_HTML.replace("{% block content %}{% endblock %}", """
             <a href="{{ r.linkedin_company_url }}" target="_blank" class="text-decoration-none c-sub">
               <i class="bi bi-building"></i> Company</a>
           {% else %}<span class="c-sub">-</span>{% endif %}
+          {% if r.persona2_name %}
+            <hr class="my-1">
+            {% if r.persona2_linkedin %}
+              <a href="{{ r.persona2_linkedin }}" target="_blank" class="text-decoration-none">
+                <i class="bi bi-linkedin"></i> Profile</a>
+            {% else %}<span class="c-sub">-</span>{% endif %}
+          {% endif %}
         </td>
         <td>
           {% if r.persona_name %}
