@@ -125,9 +125,14 @@
     ],
     "job_markets": [
       {
-        "label": "United States",
-        "location": "United States",
-        "geoId": "103644278"
+        "label": "Worldwide",
+        "location": "Worldwide",
+        "geoId": "92000000"
+      },
+      {
+        "label": "EMEA",
+        "location": "EMEA",
+        "geoId": ""
       },
       {
         "label": "Europe",
@@ -135,12 +140,14 @@
         "geoId": "91000000"
       }
     ],
-    "job_markets_label": "United States and Europe",
+    "job_markets_label": "Worldwide-remote, EMEA and Europe (US-only listings are skipped - they need US residency)",
     "job_remote_only": true,
-    "job_posted_within": "r86400",
-    "job_posted_within_label": "Posted in the last 24 hours (daily run)",
+    "job_posted_within": "r259200",
+    "job_posted_within_label": "Posted in the last 3 days (already-seen jobs are skipped)",
     "jobs_per_run": 10,
     "jobs_per_run_label": "Up to 10 new jobs per morning run (2 contacts each = 20 requests, the daily cap)",
+    "job_pages_per_run": 20,
+    "job_pages_per_run_label": "Open at most 20 job postings per run, 4-9 s apart (rate-limit protection)",
     "job_company_cooldown_days": 30,
     "candidate_country": "",
     "candidate_country_label": "Not set yet - your country of residence (from your CV)",
@@ -185,6 +192,16 @@
       "employer of record",
       "any time zone"
     ],
+    "eligibility_flexible_phrases": [
+      "work location of your choice",
+      "location of your choice",
+      "work from anywhere",
+      "remote from anywhere",
+      "work and travel",
+      "fully flexible location",
+      "choose where you work"
+    ],
+    "eligibility_flexible_label": "Single-country listings that say 'location of your choice' etc. are kept, flagged 'check before applying'",
     "cv_profile": {
       "summary": "",
       "skills": [],

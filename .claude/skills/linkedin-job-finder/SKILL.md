@@ -1,6 +1,6 @@
 ---
 name: linkedin-job-finder
-description: Find new LinkedIn job postings that match the user's CV (analyst roles - Data, Product, Business, BI - in the US and Europe), keep only remote jobs the user can legally take from their own country (no relocation, no sponsorship), record the job's department and its "Meet the hiring team" contacts, and append each job as a row in the local tracker. Use when asked to find jobs, find new vacancies, search for analyst roles, or when the scheduled morning job run fires.
+description: Find new LinkedIn job postings that match the user's CV (analyst roles - Data, Product, Business, BI - remote worldwide, EMEA and Europe), keep only remote jobs the user can legally take from their own country (no relocation, no sponsorship), record the job's department and its "Meet the hiring team" contacts, and append each job as a row in the local tracker. Use when asked to find jobs, find new vacancies, search for analyst roles, or when the scheduled morning job run fires.
 ---
 
 # LinkedIn Job Finder
@@ -42,8 +42,10 @@ Bind these code-words:
 | `{job_markets}` | each market's `location` and `geoId` for the search URL (Step 1) |
 | `{job_remote_only}` / `{job_posted_within}` | remote filter (`f_WT=2`) and recency filter (`f_TPR`) (Step 1) |
 | `{jobs_per_run}` | how many new jobs to add this run, across all titles and markets (Step 5) |
+| `{job_pages_per_run}` | the most job postings to open in one run - protects the account from rate limits (Step 1 pacing) |
 | `{candidate_country}` / `{work_authorization}` | where the user lives and what they can legally accept (Step 3) |
 | `{eligibility_reject_phrases}` / `{eligibility_accept_phrases}` | text in the posting that rules it out / in (Step 3) |
+| `{eligibility_flexible_phrases}` | text that makes a single-country listing a flagged "check" job instead of a reject (Step 3, rule 4) |
 | `{cv_profile}` / `{min_cv_fit}` | the user's skills, years, seniority, languages, domains, and the fit bar (Step 4) |
 | `{blocklist_companies}` / `{blocklist_phrases}` | staffing agencies and job aggregators to skip (Step 2) |
 
@@ -69,7 +71,15 @@ For each market in `{job_markets}` and each title in `{job_titles}` (stop as soo
 ```
 https://www.linkedin.com/jobs/search/?keywords={title}&geoId={market.geoId}&location={market.location}&f_TPR={job_posted_within}&sortBy=DD
 ```
-Add `&f_WT=2` when `{job_remote_only}` is true. URL-encode spaces as `%20`. Page with `&start=25`, `&start=50` (at most 3 pages per title per market).
+Leave out `&geoId=` when the market has no `geoId`. Add `&f_WT=2` when `{job_remote_only}` is true, but **do not trust it** - LinkedIn's newer search page silently ignores it, so Step 2 checks every card for remote itself. URL-encode spaces as `%20`. Page with `&start=25`, `&start=50` (at most 2 pages per title per market).
+
+Titles overlap heavily (a "BI Analyst" search mostly returns the same postings as "Data Analyst"), so de-duplicate cards by job id across all searches before opening anything.
+
+### Pacing - LinkedIn rate-limits bursts (this has happened on this account)
+
+- Wait a **random 4 to 9 seconds** between any two page loads (search pages and job pages alike). Never fire requests in parallel or in a quick loop.
+- Open at most `{job_pages_per_run}` job postings per run (Step 3), however many cards are left.
+- If LinkedIn shows signs of rate limiting - a "too many requests" / "something went wrong" page, HTTP 429, or several pages in a row coming back empty after loading fine earlier - **stop the search for this run**, save what was kept, and say so in the report. Do not retry in a loop.
 
 ---
 
@@ -85,7 +95,7 @@ JSON.stringify(Array.from(document.querySelectorAll('[data-job-id]')).map(card =
 }).filter(j => j.id && j.title))
 ```
 
-Drop a card, without opening it, if: its id is in `seen_job_ids`; its title contains any `{job_title_exclude}` word (whole word, case-insensitive); the company matches `{blocklist_companies}`; or the card location names a single country that is not `{candidate_country}` **and** the title area says nothing like "worldwide" / "EMEA" / "Europe" (e.g. "United States (Remote)" is a US-only listing in practice - drop it unless the user lives in the US).
+Drop a card, without opening it, if: `{job_remote_only}` is true and its location/workplace text does not say "Remote"; its id is in `seen_job_ids`; its title contains any `{job_title_exclude}` word (whole word, case-insensitive); the company matches `{blocklist_companies}`; or the card location is "United States" / a US state while `{candidate_country}` is not the US (US remote listings are US-residents-only in practice). Other single-country European cards are **not** dropped here - open them, since Step 3 rule 4 can still keep them as flagged jobs.
 
 ---
 
@@ -98,7 +108,7 @@ Decide eligibility against `{work_authorization}`, in this order:
 1. **Workplace is not Remote** (Hybrid or On-site) and `{work_authorization}` says remote only -> **reject**.
 2. The text contains any `{eligibility_reject_phrases}` that restricts **where the candidate must live or what papers they need** (e.g. "must be located in the US", "authorized to work in the United States", "EU work permit required", "W2 only") and the restriction does not include `{candidate_country}` -> **reject**. Read the sentence, not just the phrase: "eligible to work in any EMEA country" may well include the user.
 3. The text explicitly opens the role to the user (`{eligibility_accept_phrases}` such as "work from anywhere", "EMEA", "contractor / B2B", "Deel", or names `{candidate_country}` or its region) -> **keep**.
-4. **Nothing is stated.** A listing whose location is one specific country other than `{candidate_country}` -> **reject** (in practice "Germany (Remote)" means residents of Germany). A region-wide listing (Europe, EMEA, Worldwide) -> **keep**, but write `location_eligibility` as `Region-wide remote, no residency rule stated - check before applying`.
+4. **Nothing is stated.** A listing whose location is one specific country other than `{candidate_country}` -> **reject** (in practice "Germany (Remote)" means residents of Germany) - **unless** the posting contains one of `{eligibility_flexible_phrases}` (e.g. "work location of your choice") and nothing from rule 2. Then **keep it, flagged**: write `location_eligibility` as `Unclear - <country> listing but says "<quoted phrase>" - check before applying`. The outreach still goes out; the user confirms with the recruiter. A region-wide listing (Europe, EMEA, Worldwide) -> **keep**, but write `location_eligibility` as `Region-wide remote, no residency rule stated - check before applying`.
 
 Record `location_eligibility` as one short sentence quoting the deciding line, e.g. `"Remote across EMEA, contractors welcome" - open to Georgia`. Never mark a job eligible on a guess. When in real doubt, reject: a request about a job the user cannot take wastes a contact.
 
@@ -128,7 +138,7 @@ Stop the whole search once `{jobs_per_run}` jobs are kept.
 
 ## Step 6 - Report
 
-How many postings were scanned, how many dropped and why (location / work authorization, CV fit, title, already seen, cooldown), and the list of kept jobs: company, title, department, location, and the eligibility line. If the scheduled morning run called this skill, continue straight into the outreach step it asks for - do not stop here.
+How many postings were scanned, how many dropped and why (location / work authorization, CV fit, title, already seen, cooldown), any **near misses** (a single-country listing whose text hints at flexible location, e.g. "work location of your choice", with its job id so the user can check it), and the list of kept jobs: company, title, department, location, and the eligibility line. If the scheduled morning run called this skill, continue straight into the outreach step it asks for - do not stop here.
 
 ---
 
