@@ -26,3 +26,5 @@ __pycache__/
 
 # Claude personal settings (keep launch.json but not local permissions)
 .claude/settings.local.json
+seen_jobs.txt
+Aleko_Bedinadze_Data_Analyst_Final.pdf

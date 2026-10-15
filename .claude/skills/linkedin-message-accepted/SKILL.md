@@ -19,7 +19,7 @@ There is **exactly one** data file in this project: **`{project_root}/connection
 
 ## Step 0 - Load the outreach config
 
-Same as `linkedin-connect-outreach/SKILL.md`'s Step 0: load `outreach_config.json` (or the example fallback) and bind `{followup_tone}`, `{followup_char_limit}`, `{followup_auto_send}`, `{note_must_avoid}`, `{note_signoff}`, `{pause_between_sends_seconds}`. If neither config file exists, stop and tell the user it's missing.
+Same as `linkedin-connect-outreach/SKILL.md`'s Step 0: load `outreach_config.json` (or the example fallback) and bind `{followup_tone}`, `{followup_2_tone}`, `{job_followup_tone}`, `{job_followup_2_tone}`, `{followup_scope}`, `{cv_attachment}`, `{peer_followup_tone}`, `{pitch_link}`, `{about_me}`, `{followup_char_limit}`, `{followup_auto_send}`, `{note_must_avoid}`, `{note_signoff}`, `{pause_between_sends_seconds}`. If neither config file exists, stop and tell the user it's missing.
 
 ## Step 1 - Find who is due
 
@@ -27,15 +27,15 @@ Same as `linkedin-connect-outreach/SKILL.md`'s Step 0: load `outreach_config.jso
 python "{project_root}/.claude/skills/linkedin-connect-outreach/scripts/update_outreach.py" --due-followups
 ```
 
-This returns one entry per **contact** (a company with two accepted people can produce two entries), each tagged `persona: "1"` or `"2"` and `immediate_no_note: true/false`. It already includes:
+This returns one entry per **contact** (a company with several accepted people can produce several entries), each tagged `persona: "1"`, `"2"` or `"3"` (the peer) and `immediate_no_note: true/false`. It already includes:
 - Anyone who accepted a **plain connect** (no note delivered at request time) - due immediately, `immediate_no_note: true`.
-- Anyone whose scheduled follow-up window (`followup_1_days` / `followup_2_days`) has arrived - `immediate_no_note: false`.
+- Anyone whose scheduled follow-up window has arrived - `immediate_no_note: false`. Follow-up 1 is due `followup_1_days` after the acceptance (0 = same day), follow-up 2 is due `followup_2_days` after follow-up 1.
 
 It never returns anyone who already replied. If the list is empty, report that and stop - there is nothing to do.
 
 ## Step 2 - Write and send each message
 
-**Follow `linkedin-connect-outreach/SKILL.md`'s Step 10 exactly** for every entry from Step 1: the tone rules (immediate vs scheduled wording), the `--followup [1|2] --message "..." [--persona 2]` recording command, and - only if `{followup_auto_send}` is true - the browser mechanics for actually sending it (profile navigation, page-ready gate, Message button, compose box, Send). Pause `{pause_between_sends_seconds}` between each person, same anti-burst reasoning as sending connection requests.
+**Follow `linkedin-connect-outreach/SKILL.md`'s Step 10 exactly** for every entry from Step 1: the tone rules (immediate vs scheduled wording), the pitch-link and peer rules, the `--followup [1|2] --message "..." [--persona 2|3]` recording command, and - only if `{followup_auto_send}` is true - the browser mechanics for actually sending it (profile navigation, page-ready gate, Message button, compose box, Send). Pause `{pause_between_sends_seconds}` between each person, same anti-burst reasoning as sending connection requests.
 
 If `{followup_auto_send}` is false, record the message and stop there - it shows up in the dashboard with a Copy button for the user to send by hand.
 

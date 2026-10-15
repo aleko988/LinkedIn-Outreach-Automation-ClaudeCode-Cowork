@@ -31,12 +31,17 @@ It also maintains blocked_personas.txt: profiles that hit a wall this project ca
 around (e.g. LinkedIn's "verify this member knows you" email gate) get remembered there via
 --block-persona, so they are never picked as a candidate again.
 
-A company can have a SECOND contact (persona2_* columns, used when personas_per_company > 1).
---persona 2 on --mark-sent writes to persona2_connection_sent/persona2_date_sent/
-persona2_connection_result/persona2_note_sent_with_request/persona2_last_action_date instead
-of the primary persona_*/connection_* columns - it is a fully separate connection request
-against the SAME daily cap and monthly note quota, so --cap-check and --note-cap-check count
-both personas' sends together (a company where both were messaged today counts as 2).
+A company has up to THREE contacts: the primary persona (persona_*/connection_* columns),
+a second contact (persona2_*, used when personas_per_company > 1), and a peer on the team
+(persona3_*, used when peer_enabled is true). --persona 2|3 on --mark-sent, --result and
+--followup writes to that contact's columns instead of the primary ones - each is a fully
+separate connection request against the SAME daily cap and monthly note quota, so
+--cap-check and --note-cap-check count every contact's sends together.
+
+Follow-up timing (--due-followups): follow-up 1 is due followup_1_days after the acceptance
+was recorded (accepted_date; 0 = the same day), follow-up 2 is due followup_2_days after
+follow-up 1 went out. --due-emails lists contacts whose request has sat unaccepted for
+no_accept_email_days, so the skill can draft a fallback email for the user to send.
 
 Modes:
 
@@ -47,7 +52,9 @@ Modes:
   python update_outreach.py --mark-checked [--as-of YYYY-MM-DD]
   python update_outreach.py --block-persona PROFILE_URL
   python update_outreach.py --company_id acme --block-persona PROFILE_URL --data '{"persona_name": "", ...}'
+  python update_outreach.py --due-emails
   python update_outreach.py --company_id acme --persona 2 --mark-sent [--note-used yes|no]
+  python update_outreach.py --company_id acme --persona 3 --result Accepted
   python update_outreach.py --company_id acme --data JSON_OBJECT
   python update_outreach.py --company_id acme --mark-sent [--note-used yes|no]
   python update_outreach.py --company_id acme --followup 1 --message TEXT
@@ -134,18 +141,25 @@ def write_rows(csv_path: str, fieldnames, rows):
             writer.writerow(row)
 
 
+PERSONAS = ("1", "2", "3")
+
+
+def pf(persona: str, key: str) -> str:
+    """Column name for a contact slot - mirrors schema.persona_field (kept local so the
+    helpers below work before the schema module is loaded)."""
+    if persona == "1":
+        if key in ("name", "title", "linkedin", "tier"):
+            return f"persona_{key}"
+        return "connection_note" if key == "note" else key
+    return f"persona{persona}_{key}"
+
+
 def sent_today(rows) -> int:
-    """Count sends today against the daily cap - a company where BOTH the primary and
-    second persona were messaged today counts as 2, since each is its own connection
-    request against the same LinkedIn account limit."""
+    """Count sends today against the daily cap - every contact at a company (primary,
+    second, peer) is its own connection request against the same LinkedIn account limit."""
     today = date.today().isoformat()
-    count = 0
-    for r in rows:
-        if (r.get("date_sent") or "").strip() == today:
-            count += 1
-        if (r.get("persona2_date_sent") or "").strip() == today:
-            count += 1
-    return count
+    return sum(1 for r in rows for p in PERSONAS
+               if (r.get(pf(p, "date_sent")) or "").strip() == today)
 
 
 def blocked_personas_path(root: str) -> str:
@@ -202,8 +216,7 @@ def read_last_checked_date(root: str, rows) -> str:
                 return v
         except (ValueError, OSError):
             pass
-    all_dates = [(r.get("date_sent") or "").strip() for r in rows]
-    all_dates += [(r.get("persona2_date_sent") or "").strip() for r in rows]
+    all_dates = [(r.get(pf(p, "date_sent")) or "").strip() for r in rows for p in PERSONAS]
     sent_dates = sorted(d for d in all_dates if d)
     return sent_dates[0] if sent_dates else date.today().isoformat()
 
@@ -217,19 +230,20 @@ def notes_sent_this_month(rows) -> int:
     """Count connection requests actually sent WITH a personalized note this
     calendar month - this is what LinkedIn's free-plan monthly note quota limits.
     A drafted-but-unsent note, or a note sent as part of a plain (no-note) connect,
-    does not count. Checked for both the primary and second persona - each is its
-    own connection request against the same monthly quota.
+    does not count. Checked for every contact slot - each is its own connection
+    request against the same monthly quota.
     """
     ym = date.today().strftime("%Y-%m")
-    count = 0
-    for r in rows:
-        if ((r.get("note_sent_with_request") or "").strip() == "Yes"
-                and (r.get("date_sent") or "").strip().startswith(ym)):
-            count += 1
-        if ((r.get("persona2_note_sent_with_request") or "").strip() == "Yes"
-                and (r.get("persona2_date_sent") or "").strip().startswith(ym)):
-            count += 1
-    return count
+    return sum(1 for r in rows for p in PERSONAS
+               if (r.get(pf(p, "note_sent_with_request")) or "").strip() == "Yes"
+               and (r.get(pf(p, "date_sent")) or "").strip().startswith(ym))
+
+
+def parse_date(value):
+    try:
+        return datetime.strptime((value or "").strip(), "%Y-%m-%d").date()
+    except ValueError:
+        return None
 
 
 def check_note(note: str, limit: int, field: str) -> int:
@@ -253,10 +267,10 @@ def main():
     parser.add_argument("--note", help="Shorthand for setting connection_note only")
     parser.add_argument("--mark-sent", action="store_true",
                         help="Record that the connection request was actually sent now.")
-    parser.add_argument("--persona", choices=["1", "2"], default="1",
-                        help="Which contact at this company --mark-sent applies to (default: 1, "
-                             "the primary persona_* fields). '2' writes to the persona2_* send "
-                             "fields instead, for companies with a second contact.")
+    parser.add_argument("--persona", choices=list(PERSONAS), default="1",
+                        help="Which contact at this company --mark-sent / --result / --followup "
+                             "apply to (default: 1, the primary persona_* fields). '2' writes to "
+                             "the persona2_* fields (second contact), '3' to persona3_* (the peer).")
     parser.add_argument("--note-used", choices=["yes", "no"],
                         help="With --mark-sent: whether the drafted note was actually included in "
                              "the sent invite (counts against the monthly note quota) or it went out "
@@ -264,7 +278,8 @@ def main():
                              "'no' otherwise - pass explicitly to send a plain connect despite having "
                              "a drafted note on file.")
     parser.add_argument("--result",
-                        help="Set connection_result (Sent/Pending/Accepted/Ignored/Withdrawn/Failed)")
+                        help="Set connection_result (Sent/Pending/Accepted/Ignored/Withdrawn/Failed/"
+                             "Emailed) for the --persona contact. Accepted also stamps accepted_date.")
     parser.add_argument("--followup", type=int, choices=[1, 2], help="Record follow-up 1 or 2")
     parser.add_argument("--message", help="The follow-up message text (use with --followup)")
     parser.add_argument("--delete", action="store_true", help="Delete this row")
@@ -280,6 +295,9 @@ def main():
                         help="Print how many personalized-note sends remain this month, then exit.")
     parser.add_argument("--due-followups", action="store_true",
                         help="List accepted connections whose follow-up is due, then exit.")
+    parser.add_argument("--due-emails", action="store_true",
+                        help="List contacts whose request has sat unaccepted for "
+                             "no_accept_email_days with no fallback email drafted yet, then exit.")
     parser.add_argument("--acceptance-check-status", action="store_true",
                         help="Print the cutoff date for the daily acceptance-check pass, then exit.")
     parser.add_argument("--mark-checked", action="store_true",
@@ -332,62 +350,91 @@ def main():
         return
 
     # ---------- DUE FOLLOW-UPS ----------
+    # followup_scope "job_rows": only rows that came from a specific job posting (job_id set)
+    # get follow-ups and fallback emails - legacy company-only rows are left alone.
+    job_rows_only = str(cfg.get("followup_scope", "all")).strip() == "job_rows"
+
+    def in_scope(r):
+        return not job_rows_only or bool((r.get("job_id") or "").strip())
+
     if args.due_followups:
-        d1 = int(cfg.get("followup_1_days", 3))
-        d2 = int(cfg.get("followup_2_days", 8))
+        d1 = int(cfg.get("followup_1_days", 0))
+        d2 = int(cfg.get("followup_2_days", 4))
 
         def due_for_persona(r, p):
-            """p is '1' (primary) or '2' (second contact) - checks that persona's own
-            acceptance/reply/followup state independently."""
-            prefix = "persona2_" if p == "2" else ""
-            result_field = f"{prefix}connection_result"
-            sent_field = f"{prefix}date_sent"
-            note_used_field = f"{prefix}note_sent_with_request"
-            f1_date_field = f"{prefix}followup_1_date"
-            f2_date_field = f"{prefix}followup_2_date"
-            reply_field = f"{prefix}reply_status"
-            name_field = f"{prefix}name" if p == "2" else "persona_name"
-            linkedin_field = f"{prefix}linkedin" if p == "2" else "persona_linkedin"
+            """Checks one contact slot's own acceptance/reply/followup state independently.
 
-            if p == "2" and not (r.get("persona2_name") or "").strip():
+            Follow-up 1 is anchored on the ACCEPTANCE (accepted_date), not the send - the
+            best time to message is right after they accept. Rows accepted before
+            accepted_date existed fall back to date_sent. Follow-up 2 is anchored on
+            follow-up 1, so it always lands followup_2_days after the first message.
+            """
+            if not in_scope(r) or not (r.get(pf(p, "name")) or "").strip():
                 return None
-            if (r.get(result_field) or "").strip() != "Accepted":
+            if (r.get(pf(p, "connection_result")) or "").strip() != "Accepted":
                 return None
-            if (r.get(reply_field) or "").strip() in ("Replied", "Positive", "Not interested"):
+            if (r.get(pf(p, "reply_status")) or "").strip() in ("Replied", "Positive", "Not interested"):
                 return None
-            sent = (r.get(sent_field) or "").strip()
-            if not sent:
+            anchor = parse_date(r.get(pf(p, "accepted_date"))) or parse_date(r.get(pf(p, "date_sent")))
+            if not anchor:
                 return None
-            try:
-                sent_d = datetime.strptime(sent, "%Y-%m-%d").date()
-            except ValueError:
-                return None
-            age = (date.today() - sent_d).days
-            has_f1 = bool((r.get(f1_date_field) or "").strip())
-            has_f2 = bool((r.get(f2_date_field) or "").strip())
-            note_was_used = (r.get(note_used_field) or "").strip() == "Yes"
+            today_d = date.today()
+            f1 = parse_date(r.get(pf(p, "followup_1_date")))
+            has_f1 = bool((r.get(pf(p, "followup_1_date")) or "").strip())
+            has_f2 = bool((r.get(pf(p, "followup_2_date")) or "").strip())
+            note_was_used = (r.get(pf(p, "note_sent_with_request")) or "").strip() == "Yes"
             which = None
             if not has_f1:
-                # They accepted a PLAIN connect (no note delivered at request time) - message
-                # them now instead of waiting followup_1_days, since they never got the
-                # personalized content at all.
-                if age >= d1 or not note_was_used:
+                # A plain connect (no note delivered at request time) is always due now -
+                # they never got the personalized content at all.
+                if (today_d - anchor).days >= d1 or not note_was_used:
                     which = 1
-            elif has_f1 and not has_f2 and age >= d2:
+            elif not has_f2 and (today_d - (f1 or anchor)).days >= d2:
                 which = 2
             if not which:
                 return None
             return {"company_id": r.get("company_id"), "company_name": r.get("company_name"),
-                    "persona": p, "persona_name": r.get(name_field),
-                    "persona_linkedin": r.get(linkedin_field), "followup": which,
-                    "days_since_sent": age, "immediate_no_note": which == 1 and not note_was_used}
+                    "job_title": r.get("job_title"), "job_url": r.get("job_url"),
+                    "persona": p, "persona_name": r.get(pf(p, "name")),
+                    "persona_tier": r.get(pf(p, "tier")),
+                    "persona_linkedin": r.get(pf(p, "linkedin")), "followup": which,
+                    "days_since_accepted": (today_d - anchor).days,
+                    "immediate_no_note": which == 1 and not note_was_used}
 
+        due = [e for r in rows for p in PERSONAS for e in [due_for_persona(r, p)] if e]
+        print(json.dumps(due, indent=2))
+        return
+
+    # ---------- DUE FALLBACK EMAILS ----------
+    if args.due_emails:
+        n_days = int(cfg.get("no_accept_email_days", 5))
         due = []
         for r in rows:
-            for p in ("1", "2"):
-                entry = due_for_persona(r, p)
-                if entry:
-                    due.append(entry)
+            if not in_scope(r):
+                continue
+            for p in PERSONAS:
+                if not (r.get(pf(p, "name")) or "").strip():
+                    continue
+                if (r.get(pf(p, "connection_sent")) or "").strip() != "Yes":
+                    continue
+                if (r.get(pf(p, "connection_result")) or "").strip() not in ("Sent", "Pending", ""):
+                    continue
+                if (r.get(pf(p, "email_draft")) or "").strip():
+                    continue
+                sent_d = parse_date(r.get(pf(p, "date_sent")))
+                if not sent_d or (date.today() - sent_d).days < n_days:
+                    continue
+                due.append({"company_id": r.get("company_id"), "company_name": r.get("company_name"),
+                            "company_website": r.get("company_website"),
+                            "job_title": r.get("job_title"), "job_url": r.get("job_url"),
+                            "persona": p, "persona_name": r.get(pf(p, "name")),
+                            "persona_title": r.get(pf(p, "title")),
+                            "persona_tier": r.get(pf(p, "tier")),
+                            "days_since_sent": (date.today() - sent_d).days,
+                            "email_field": pf(p, "email_draft")})
+        # Freshest first - a request sent 6 days ago is a better email target than one
+        # that has sat for two months. The skill drafts at most emails_per_run of these.
+        due.sort(key=lambda e: e["days_since_sent"])
         print(json.dumps(due, indent=2))
         return
 
@@ -417,7 +464,7 @@ def main():
 
     if not args.company_id:
         print("Error: --company_id is required (unless --cap-check / --note-cap-check / "
-              "--due-followups / --acceptance-check-status / --mark-checked / --block-persona / "
+              "--due-followups / --due-emails / --acceptance-check-status / --mark-checked / --block-persona / "
               "--print-root)", file=sys.stderr)
         sys.exit(1)
 
@@ -456,18 +503,23 @@ def main():
     if args.note:
         updates["connection_note"] = args.note
 
+    # The second-contact and peer notes get the same hard length check as connection_note.
+    for p in ("2", "3"):
+        f = pf(p, "note")
+        if f in updates and str(updates[f]).strip():
+            check_note(str(updates[f]), note_limit, f)
+
     # ---------- FOLLOW-UP (primary or persona2) ----------
     if args.followup:
         if not args.message:
             print("Error: --followup requires --message", file=sys.stderr)
             sys.exit(1)
-        fu_prefix = "persona2_" if args.persona == "2" else ""
-        fu_msg_field = f"{fu_prefix}followup_{args.followup}_message"
-        fu_date_field = f"{fu_prefix}followup_{args.followup}_date"
+        fu_msg_field = pf(args.persona, f"followup_{args.followup}_message")
+        fu_date_field = pf(args.persona, f"followup_{args.followup}_date")
         check_note(args.message, followup_limit, fu_msg_field)
         updates[fu_msg_field] = args.message
         updates[fu_date_field] = today
-        updates[f"{fu_prefix}last_action_date" if fu_prefix else "last_action_date"] = today
+        updates[pf(args.persona, "last_action_date")] = today
 
     # ---------- NOTE LENGTH GUARDRAIL ----------
     if "connection_note" in updates:
@@ -476,15 +528,15 @@ def main():
         if (target.get("outreach_status") or "").strip() not in ("Request sent", "Accepted", "Replied"):
             updates.setdefault("outreach_status", "Note drafted")
 
-    # ---------- MARK SENT (daily-cap and monthly-note-cap enforced, primary or persona2) ----------
+    # ---------- MARK SENT (daily-cap and monthly-note-cap enforced, any contact slot) ----------
     if args.mark_sent:
-        is_p2 = args.persona == "2"
-        note_field = "persona2_note" if is_p2 else "connection_note"
-        sent_field = "persona2_connection_sent" if is_p2 else "connection_sent"
-        date_field = "persona2_date_sent" if is_p2 else "date_sent"
-        result_field = "persona2_connection_result" if is_p2 else "connection_result"
-        note_used_field = "persona2_note_sent_with_request" if is_p2 else "note_sent_with_request"
-        last_action_field = "persona2_last_action_date" if is_p2 else "last_action_date"
+        is_primary = args.persona == "1"
+        note_field = pf(args.persona, "note")
+        sent_field = pf(args.persona, "connection_sent")
+        date_field = pf(args.persona, "date_sent")
+        result_field = pf(args.persona, "connection_result")
+        note_used_field = pf(args.persona, "note_sent_with_request")
+        last_action_field = pf(args.persona, "last_action_date")
 
         # A connection may go out as a plain connect (no note) once the monthly note
         # quota is used up - a drafted note staying on file for the record is fine,
@@ -520,15 +572,19 @@ def main():
         updates[result_field] = args.result or "Sent"
         updates[note_used_field] = "Yes" if note_used == "yes" else "No"
         updates[last_action_field] = today
-        if not is_p2:
-            # No per-persona outreach_status column exists for persona2 - the shared
-            # outreach_status only reflects the primary persona's progress.
+        if is_primary:
+            # No per-persona outreach_status column exists for the other contacts - the
+            # shared outreach_status only reflects the primary persona's progress.
             updates["outreach_status"] = "Request sent"
     elif args.result:
-        updates["connection_result"] = args.result
-        updates["last_action_date"] = today
+        updates[pf(args.persona, "connection_result")] = args.result
+        updates[pf(args.persona, "last_action_date")] = today
         if args.result == "Accepted":
-            updates["outreach_status"] = "Accepted"
+            # Stamp the acceptance once - it anchors follow-up 1. A re-run never moves it.
+            if not (target.get(pf(args.persona, "accepted_date")) or "").strip():
+                updates[pf(args.persona, "accepted_date")] = today
+            if args.persona == "1":
+                updates["outreach_status"] = "Accepted"
 
     if not updates:
         print("Error: nothing to update. Pass --data, --note, --mark-sent, --result or "

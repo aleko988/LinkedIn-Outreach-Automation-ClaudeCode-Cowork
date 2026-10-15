@@ -43,6 +43,26 @@ SKILLS = {
         "script": "update_outreach.py",
         "script_step": "the note-validation, send-cap and CSV-update steps",
     },
+    "linkedin-job-finder": {
+        "title": "LinkedIn Job Finder",
+        "description": "Find new LinkedIn analyst job postings that match your CV and that you can take from your country, and save each job to the local tracker. Use when asked to find jobs or vacancies, or when the scheduled morning run fires.",
+        "script": "append_jobs.py",
+        "script_step": "the job-save step",
+    },
+    "linkedin-morning-run": {
+        "title": "LinkedIn Morning Run",
+        "description": "Scheduled morning run: find today's matching jobs, then send connection requests to each job's department hiring manager and recruiter under the daily cap. Use when the morning schedule fires or when asked to run the morning job search.",
+        "script": "update_outreach.py",
+        "script_dir": "linkedin-connect-outreach",
+        "script_step": "the send-cap and CSV-update steps",
+    },
+    "linkedin-night-run": {
+        "title": "LinkedIn Night Run",
+        "description": "Scheduled night run: record today's accepted connection requests and message each new connection about the specific role with your CV attached. Use when the night schedule fires or when asked to check who accepted and message them.",
+        "script": "update_outreach.py",
+        "script_dir": "linkedin-connect-outreach",
+        "script_step": "the acceptance-check, due-followups and CSV-update steps",
+    },
     "linkedin-message-accepted": {
         "title": "LinkedIn Message Accepted Connections",
         "description": "Message everyone who accepted a connection request but has no message yet, or is due for their next follow-up - without running a full find-companies-and-send-requests cycle. Use when asked to message people who accepted, catch up with new connections, or clear the Awaiting message queue.",

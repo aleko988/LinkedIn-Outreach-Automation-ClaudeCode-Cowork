@@ -1,36 +1,224 @@
 {
   "_README": "SINGLE SOURCE OF TRUTH for which companies get found, which person at each company gets the connection request, and what the note says. This is the SHIPPED DEFAULT. The live, user-edited copy is outreach_config.json (gitignored). Both skills load the live config at the START of every run - scheduled or on-demand - and use ONLY these values. To retarget, follow RETARGETING.md, which edits the live outreach_config.json. Never edit knob values inline in the skills; edit them here.",
-  "last_updated": "2026-09-04",
+  "last_updated": "2026-10-15",
   "campaign_label": "Job search networking - Data/Analytics roles, Europe, remote-friendly",
-
   "finder": {
-    "search_keywords": ["Data+Analyst", "Data+Extraction+Specialist", "Web+Scraping+Specialist", "Analytics+Engineer", "BI+Developer", "Power+BI+Developer", "Business+Intelligence+Analyst", "SQL+Analyst", "Data+Engineer"],
+    "search_keywords": [
+      "Data+Analyst",
+      "Data+Extraction+Specialist",
+      "Web+Scraping+Specialist",
+      "Analytics+Engineer",
+      "BI+Developer",
+      "Power+BI+Developer",
+      "Business+Intelligence+Analyst",
+      "SQL+Analyst",
+      "Data+Engineer"
+    ],
     "search_keywords_label": "Data Analyst, Data Extraction Specialist, Web Scraping Specialist, Analytics Engineer, BI Developer, Power BI Developer, Business Intelligence Analyst, SQL Analyst, Data Engineer",
     "search_mode": "jobs",
     "search_mode_label": "companies currently hiring for one of these keywords",
     "location": "Europe",
     "remote_only": true,
     "remote_only_label": "Remote roles only (f_WT=2)",
-    "hq_location_filter": ["Europe", "Remote", "Germany", "United Kingdom", "Ireland", "Netherlands", "France", "Spain", "Portugal", "Poland", "Sweden", "Norway", "Denmark", "Finland", "Italy", "Switzerland", "Austria", "Belgium", "Czechia", "Romania", "Georgia", "Estonia", "Lithuania", "Latvia"],
+    "hq_location_filter": [
+      "Europe",
+      "Remote",
+      "Germany",
+      "United Kingdom",
+      "Ireland",
+      "Netherlands",
+      "France",
+      "Spain",
+      "Portugal",
+      "Poland",
+      "Sweden",
+      "Norway",
+      "Denmark",
+      "Finland",
+      "Italy",
+      "Switzerland",
+      "Austria",
+      "Belgium",
+      "Czechia",
+      "Romania",
+      "Georgia",
+      "Estonia",
+      "Lithuania",
+      "Latvia"
+    ],
     "hq_location_filter_label": "Europe-based (or remote-first) companies",
-    "industry_filter": ["Software Development", "Information Technology", "Internet", "Technology, Information and Internet", "IT Services and IT Consulting"],
+    "industry_filter": [
+      "Software Development",
+      "Information Technology",
+      "Internet",
+      "Technology, Information and Internet",
+      "IT Services and IT Consulting"
+    ],
     "industry_filter_label": "B2B SaaS and B2C tech",
-    "company_size_allow": ["1-10", "11-50", "51-200", "201-500", "501-1,000", "1K-5K"],
+    "company_size_allow": [
+      "1-10",
+      "11-50",
+      "51-200",
+      "201-500",
+      "501-1,000",
+      "1K-5K"
+    ],
     "company_size_label": "Startup to scaleup (up to ~5,000 employees)",
     "companies_per_run": 25,
     "pages_to_scan": 4,
     "require_company_page": true,
-    "blocklist_companies": ["Swooped", "Ladders", "Jobgether", "Recruit.net", "Jobot", "Nexxt", "Talentify", "Employbl", "Adzuna", "Hirect", "Sci-Rec", "Upwork", "Fiverr"],
-    "blocklist_phrases": ["currently partnered with", "we are not the employer", "on behalf of", "our client is", "confidential company", "staffing agency"],
-    "signal_keywords": ["hiring", "raised", "Series A", "Series B", "funding", "launched", "expanding", "new office", "remote-first", "remote friendly"],
-    "skip_if_already_in_tracker": true
+    "blocklist_companies": [
+      "Swooped",
+      "Ladders",
+      "Jobgether",
+      "Recruit.net",
+      "Jobot",
+      "Nexxt",
+      "Talentify",
+      "Employbl",
+      "Adzuna",
+      "Hirect",
+      "Sci-Rec",
+      "Upwork",
+      "Fiverr"
+    ],
+    "blocklist_phrases": [
+      "currently partnered with",
+      "we are not the employer",
+      "on behalf of",
+      "our client is",
+      "confidential company",
+      "staffing agency"
+    ],
+    "signal_keywords": [
+      "hiring",
+      "raised",
+      "Series A",
+      "Series B",
+      "funding",
+      "launched",
+      "expanding",
+      "new office",
+      "remote-first",
+      "remote friendly"
+    ],
+    "skip_if_already_in_tracker": true,
+    "job_titles": [
+      "Data Analyst",
+      "Product Analyst",
+      "Business Analyst",
+      "BI Analyst",
+      "Reporting Analyst",
+      "Analytics Analyst"
+    ],
+    "job_titles_label": "Data Analyst, Product Analyst, Business Analyst, BI Analyst, Reporting Analyst (refined from your CV)",
+    "job_title_exclude": [
+      "Principal",
+      "Staff",
+      "Director",
+      "Head of",
+      "VP",
+      "Vice President",
+      "Intern",
+      "Internship",
+      "Manager"
+    ],
+    "job_markets": [
+      {
+        "label": "United States",
+        "location": "United States",
+        "geoId": "103644278"
+      },
+      {
+        "label": "Europe",
+        "location": "European Union",
+        "geoId": "91000000"
+      }
+    ],
+    "job_markets_label": "United States and Europe",
+    "job_remote_only": true,
+    "job_posted_within": "r86400",
+    "job_posted_within_label": "Posted in the last 24 hours (daily run)",
+    "jobs_per_run": 10,
+    "jobs_per_run_label": "Up to 10 new jobs per morning run (2 contacts each = 20 requests, the daily cap)",
+    "job_company_cooldown_days": 30,
+    "candidate_country": "",
+    "candidate_country_label": "Not set yet - your country of residence (from your CV)",
+    "work_authorization": "Remote only. No visa sponsorship and no relocation. Can work as an employee of a global/EOR employer or as a contractor (B2B) from candidate_country.",
+    "work_authorization_label": "Remote only - no sponsorship, no relocation",
+    "eligibility_reject_phrases": [
+      "must be located in",
+      "must reside in",
+      "must be based in",
+      "must live in",
+      "only candidates based in",
+      "only open to candidates in",
+      "residents of",
+      "authorized to work in the United States",
+      "US work authorization",
+      "U.S. citizen",
+      "US citizen",
+      "green card",
+      "security clearance",
+      "W2 only",
+      "W-2 only",
+      "right to work in the UK",
+      "EU work permit",
+      "valid work permit",
+      "eligible to work in",
+      "relocation required",
+      "on-site",
+      "onsite"
+    ],
+    "eligibility_accept_phrases": [
+      "work from anywhere",
+      "remote worldwide",
+      "anywhere in the world",
+      "fully remote globally",
+      "global remote",
+      "EMEA",
+      "contractor",
+      "B2B",
+      "independent contractor",
+      "Deel",
+      "Remote.com",
+      "employer of record",
+      "any time zone"
+    ],
+    "cv_profile": {
+      "summary": "",
+      "skills": [],
+      "years_experience": null,
+      "seniority": "",
+      "languages": [],
+      "domains": []
+    },
+    "cv_profile_label": "Not set yet - filled in from your CV",
+    "min_cv_fit": "Keep a job only if the CV covers most of its must-have skills (tools like SQL / Python / Power BI and the seniority level). Nice-to-haves do not count against it."
   },
-
   "outreach": {
     "persona_tiers": [
-      { "n": 1, "type": "Recruiter / Talent Acquisition", "who": "Technical Recruiter, Talent Acquisition Partner, People/Talent team member handling data or engineering roles", "keywords": "Recruiter+Talent+Acquisition", "function_code": "12" },
-      { "n": 2, "type": "Data/Analytics Hiring Manager", "who": "Head of Data, Head of Analytics, Analytics Engineering Manager, Lead Data Analyst - the person who'd actually manage this role", "keywords": "Head+of+Data+Analytics+Manager+Lead", "function_code": "25" },
-      { "n": 3, "type": "Founder or CTO", "who": "Founder, Co-founder or CTO - use at companies under the small-company threshold, where there is no dedicated data lead yet", "keywords": "Founder+CTO+Co-founder", "function_code": "13" }
+      {
+        "n": 1,
+        "type": "Recruiter / Talent Acquisition",
+        "who": "Technical Recruiter, Talent Acquisition Partner, People/Talent team member - verified to recruit for data, analytics or tech roles (headline, About, or recent posts), not just any recruiter at the company",
+        "keywords": "Recruiter+Talent+Acquisition",
+        "function_code": "12"
+      },
+      {
+        "n": 2,
+        "type": "Data/Analytics Hiring Manager",
+        "who": "The person directly above the role you'd fill: Head of Data, Head of BI, Data/Analytics Manager, Analytics Engineering Manager, Lead Data Analyst, Director/VP of Data - check acronyms too (BI, VP, Dir.)",
+        "keywords": "Head+of+Data+Analytics+Manager+Lead",
+        "function_code": "25"
+      },
+      {
+        "n": 3,
+        "type": "Founder or CTO",
+        "who": "Founder, Co-founder or CTO - use at companies under the small-company threshold, where there is no dedicated data lead yet",
+        "keywords": "Founder+CTO+Co-founder",
+        "function_code": "13"
+      }
     ],
     "personas_per_company": 1,
     "personas_per_company_label": "1 person per company (recruiter first, hiring manager as fallback)",
@@ -40,35 +228,125 @@
     "prefer_second_degree": true,
     "prefer_same_location": false,
     "skip_if_no_persona": "keep",
-
     "note_char_limit": 200,
     "note_char_limit_label": "200 characters max per connection note (counting spaces)",
     "note_tone": "Proactive, not passive: name the specific angle that made you reach out - a career transition, a project, a skill, the exact role they're hiring for - and say plainly that it stood out to you. Then a genuine, low-pressure ask to connect or learn more, with a soft acknowledgement that it's a bit of an ask from a stranger. Warm and direct, first person. No flattery filler ('hope you're having a great week'), no buzzwords, no em dashes.",
-    "note_must_include": ["their first name", "the specific angle or detail that made you reach out (their transition, project, role, or what the company/team is building)", "a brief low-pressure close (e.g. 'no worries if it's too much')"],
-    "note_must_avoid": ["I hope this finds you well", "quick question", "picking your brain", "synergy", "reaching out to see if", "em dashes", "please consider my application", "attached is my resume", "I am looking for a job"],
+    "note_must_include": [
+      "their first name",
+      "the specific angle or detail that made you reach out (their transition, project, role, or what the company/team is building)",
+      "a brief low-pressure close (e.g. 'no worries if it's too much')"
+    ],
+    "note_must_avoid": [
+      "I hope this finds you well",
+      "quick question",
+      "picking your brain",
+      "synergy",
+      "reaching out to see if",
+      "em dashes",
+      "please consider my application",
+      "attached is my resume",
+      "I am looking for a job"
+    ],
     "note_ask": "Connect, or an open invite to hear about their journey/team - no CV attachment, no explicit job ask, no link, in the first note.",
     "note_signoff": "none",
     "note_example": "Hi James, your move from healthcare into data stood out to me. I'd love to hear about that journey. No worries if this is a big ask from a stranger!",
-
     "note_monthly_limit": 5,
     "note_monthly_limit_label": "5 notes per month (LinkedIn free-plan limit on personalized invites)",
-
     "daily_connection_cap": 15,
     "daily_connection_cap_label": "15 connection requests per day",
-    "pause_between_sends_seconds": [25, 60],
+    "pause_between_sends_seconds": [
+      25,
+      60
+    ],
     "confirm_before_first_send": true,
     "stop_on_weekly_invite_limit": true,
-
     "followup_enabled": true,
     "followup_auto_send": false,
     "followup_auto_send_label": "Draft only - you send it yourself from the dashboard",
-    "followup_1_days": 3,
-    "followup_1_label": "day 3 after acceptance",
-    "followup_2_days": 8,
-    "followup_2_label": "day 8 after acceptance",
+    "followup_1_days": 0,
+    "followup_1_label": "same day they accept",
+    "followup_2_days": 4,
+    "followup_2_label": "4 days after the first message",
     "followup_char_limit": 400,
-    "followup_tone": "Short, genuine, references what you noticed in the note they accepted. Ask about their team's data stack or how the role came about - one open, low-pressure question. No direct 'do you have a job for me' in follow-up 1."
+    "followup_tone": "Short, genuine, references what you noticed in the note they accepted. Ask about their team's data stack or how the role came about - one open, low-pressure question. No direct 'do you have a job for me' in follow-up 1.",
+    "about_me": "",
+    "about_me_label": "Positioning line: what you do, in one sentence (blank = messages stay company-only)",
+    "followup_2_tone": "4 days after follow-up 1, shorter, a friendly reminder that closes the loop gracefully.",
+    "candidates_to_inspect": 4,
+    "candidates_to_inspect_label": "Open the top 4 matching profiles per role and pick the best-qualified one (never message all of them)",
+    "recruiter_focus_keywords": [
+      "data",
+      "analytics",
+      "analyst",
+      "BI",
+      "business intelligence",
+      "tech",
+      "technology",
+      "engineering",
+      "IT",
+      "software"
+    ],
+    "peer_enabled": true,
+    "peer_enabled_label": "On - also connect with 1 peer per company (someone on the team you'd join)",
+    "peer_tier": {
+      "type": "Peer (same team)",
+      "who": "Data Analyst, BI Analyst, Analytics Engineer, Data Engineer - an individual contributor on the team you'd join, not a manager or recruiter",
+      "keywords": "Data+Analyst+BI+Analytics+Engineer",
+      "function_code": "25"
+    },
+    "peer_common_ground": {
+      "university": "",
+      "background": "",
+      "past_companies": [],
+      "home_country": ""
+    },
+    "peer_common_ground_label": "Same department (data) always; add your university / background / past companies to find stronger matches",
+    "peer_ask": "A 15-minute chat about what the team works on and what they look for in new people - never a referral or job ask in the first note.",
+    "peer_note_example": "Hi Nino, fellow data person here - I build scraping pipelines and Power BI reporting. Would love 15 min to hear how the data team at Acme works. No worries if not!",
+    "peer_followup_tone": "Thank them for connecting, name the common ground, then ask for a 15-minute call about the team and how they got in. Casual, peer-to-peer, no pitch link. Follow-up 2: after a call, or if they replied warmly, ask if there is anyone else on the team worth talking to, or whether they would be open to referring you for a matching role.",
+    "pitch_link": "",
+    "pitch_link_label": "Not set yet - CV / video pitch link (e.g. Reslink) for the first message after acceptance",
+    "cv_attachment": "",
+    "cv_attachment_label": "Not set - path to a CV PDF to attach to the first message after acceptance",
+    "no_accept_email_days": 5,
+    "no_accept_email_days_label": "If a request is still unaccepted after 5 days, draft an email for you to send",
+    "emails_per_run": 10,
+    "emails_per_run_label": "Draft at most 10 fallback emails per run (newest unaccepted requests first)",
+    "email_tone": "Short cold email, under 120 words. Subject line names the role or team. Body: who you are in one line ({about_me}), the specific reason you picked their company, the ask matched to their role (recruiter: whether you could be considered for data roles; hiring manager: whether that work is something the team is bringing on; peer: a 15-minute chat), and {pitch_link} if set. Mention you also sent a LinkedIn request. No em dashes.",
+    "job_contacts": [
+      {
+        "slot": 1,
+        "role": "Hiring Manager",
+        "who": "The person the analyst role reports to, in the job's department: e.g. Healthcare Analytics Manager, Head of Product Analytics, Marketing Analytics Lead, Data/BI Manager for that team",
+        "department_keywords": "{job_department}+Analytics+Manager+Head+Lead+Director",
+        "general_keywords": "Head+of+Data+Analytics+Manager+BI+Lead",
+        "function_code": "25"
+      },
+      {
+        "slot": 2,
+        "role": "Recruiter",
+        "who": "The recruiter or talent partner who hires for that department or for data/analytics roles - ideally the one who posted this job",
+        "department_keywords": "Recruiter+Talent+{job_department}",
+        "general_keywords": "Recruiter+Talent+Acquisition",
+        "function_code": "12"
+      }
+    ],
+    "job_contacts_label": "Per job: the department's hiring manager + the recruiter for that department (falls back to general data manager / recruiter / talent acquisition)",
+    "job_note_example": "Hi Sarah, saw Acme is hiring a Product Analyst for the healthcare team. I work with SQL, Python and Power BI and would love to connect about the role. No worries if not!",
+    "job_followup_tone": "Short, under 350 characters, the message the user asked for: (1) thanks for connecting; (2) one line on who you are, from {about_me}; (3) you are reaching out about the <job_title> role at <company>; (4) 'here is my CV: {pitch_link}' (if pitch_link is blank: 'happy to send my CV'); (5) you would really appreciate any feedback, or a pointer to the right person. Warm, plain, first person, no em dashes, never 'do you have a job for me'.",
+    "job_followup_2_tone": "4 days after the first message, under 200 characters: a friendly one-line reminder about the <job_title> role and the CV link, thanking them either way.",
+    "followup_scope": "all",
+    "followup_scope_label": "Follow-ups for every row"
   },
-
-  "custom_fields_added": ["signal", "why_relevant", "persona_mutuals", "week", "note_sent_with_request"]
+  "custom_fields_added": [
+    "signal",
+    "why_relevant",
+    "persona_mutuals",
+    "week",
+    "note_sent_with_request",
+    "accepted_date",
+    "email_draft",
+    "persona3_* (peer contact)",
+    "job_id, job_title, job_url, job_location, job_workplace, job_department, job_posted, location_eligibility, cv_fit"
+  ]
 }

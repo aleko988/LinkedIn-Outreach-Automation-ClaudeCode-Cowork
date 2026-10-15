@@ -116,16 +116,26 @@ Before the first outreach run, tell the user in plain language what will happen:
 
 ### 6. Write the setup-complete marker (LAST, only after every step above succeeded)
 
-## How the three skills work together
+## How the skills work together
 
-1. **Company finder** searches LinkedIn for companies matching the ICP and **appends** them as new rows to `connections.csv` (finder columns filled, outreach columns blank). It de-dups by company slug using `seen_companies.txt` and stamps a `week` bucket.
-2. **Connect outreach** scans `connections.csv` for **any row where `persona_name` is blank** - regardless of `outreach_status` or how long ago it was added - finds the right person per the configured tiers, writes a note of 200 characters or less, sends the request under the daily cap and monthly note quota, and records the result. It also runs the daily acceptance-check pass (Step 11: checks LinkedIn's Connections page for new acceptances) and the **follow-up pass**: accepted connections with no reply get messaged immediately if they never received a note, otherwise follow-up 1 on day 3 and follow-up 2 on day 8 (both configurable).
+0. **Job finder (the current campaign's entry point)** searches LinkedIn Jobs for analyst roles that fit the user's CV (`finder.cv_profile`) in the configured markets, keeps only **remote jobs the user can legally take from `candidate_country`** (no relocation, no sponsorship), records the job's department and its "Meet the hiring team" people, and appends **one row per job** (`company_id` = `<company-slug>--<job_id>`, job columns filled). Then the outreach skill (Step 3j) contacts that department's hiring manager and recruiter, falling back to general data managers / recruiters / talent acquisition. The **morning run** skill chains job finder -> outreach send; the **night run** skill records acceptances and sends each new connection the "who I am, this role, my CV, would appreciate feedback" message. Legacy company-only rows get no more follow-ups (`followup_scope: job_rows`).
+1. **Company finder** (legacy company-first mode) searches LinkedIn for companies matching the ICP and **appends** them as new rows to `connections.csv` (finder columns filled, outreach columns blank). It de-dups by company slug using `seen_companies.txt` and stamps a `week` bucket.
+2. **Connect outreach** works **three networking tracks** per company - the hiring manager, a recruiter verified to hire for the field, and (if `peer_enabled`) a peer on the team found through common ground (same university, background or department), stored in a third contact slot `persona3_*`. It scans `connections.csv` for **any row where `persona_name` is blank** - regardless of `outreach_status` or how long ago it was added - plus older companies with no peer yet, finds the right person per the configured tiers, writes a note of 200 characters or less, sends the request under the daily cap and monthly note quota, and records the result. It also runs the daily acceptance-check pass (Step 11: checks LinkedIn's Connections page for new acceptances) and the **follow-up pass**: accepted connections with no reply get messaged immediately if they never received a note, otherwise follow-up 1 on the day the acceptance is detected and follow-up 2 four days after that (both configurable), with the `pitch_link` (CV / video pitch) in the first message to recruiters and hiring managers. Requests that sit unaccepted for `no_accept_email_days` get a fallback email **drafted** (Step 12) - the user finds the address and sends it; the skill never sends email.
 3. **Message accepted connections** is a lighter, on-demand entry point into just the follow-up pass - message everyone already accepted with no message yet, without re-checking for new acceptances or running the full find-and-send cycle. Use it to clear the dashboard's "Awaiting message" tab right now, rather than waiting for the daily schedule.
 4. The **dashboard** reads `connections.csv` and renders it as the weekly sheet: company, profile, persona, request sent, follow up - plus tabs for who's awaiting a message vs. already messaged.
 
 ## Scheduling
 
 A scheduled run needs a **logged-in LinkedIn browser** and the **local** `connections.csv`, so it must run **on the user's machine**, not as a cloud agent. This project has been run with up to three distinct scheduled tasks - they overlap in what they touch, so read the note at the end before assuming all three should run together.
+
+### Current schedule: morning run + night run (job-first campaign)
+
+Two Cowork scheduled tasks, both on the user's machine (they need the logged-in browser):
+
+- **Morning** (e.g. 09:00 daily): *"Use the linkedin-connect-outreach:linkedin-morning-run skill to find today's new matching jobs and send connection requests to each job's hiring manager and recruiter. confirm_before_first_send is false, so send directly. Respect every hard limit; if LinkedIn shows a CAPTCHA, security checkpoint, or the weekly invite limit, stop immediately."*
+- **Night** (e.g. 22:00 daily): *"Use the linkedin-connect-outreach:linkedin-night-run skill to record today's accepted connection requests and message each new connection about their role with my CV attached. Do not find jobs or send new connection requests."*
+
+These **replace** the older daily send-pass and acceptance-check tasks below - running those too would send to the backlog and re-check acceptances twice. Offer to disable them.
 
 ### Company finding: on-demand only for this campaign
 
@@ -157,6 +167,10 @@ If unsure, ask: "Do you want me to change your settings to X, or run with your c
 **Finder settings** (`finder` block):
 | User says something like... | Config key |
 |---|---|
+| "Also look for Marketing Analyst jobs" / "no senior roles" | `job_titles` / `job_title_exclude` |
+| "Add the UK" / "only Europe" | `job_markets` |
+| "I moved to X" / "I can relocate now" | `candidate_country` / `work_authorization` |
+| "More jobs per day" | `jobs_per_run` (2 requests each, so mind `daily_connection_cap`) |
 | "Look for agencies instead" / "find fintech companies" | `search_keywords` + `industry_filter` |
 | "Search Germany" / "only companies in London" | `location` |
 | "Only companies under 200 people" / "bigger companies" | `company_size_allow` |
@@ -174,6 +188,11 @@ If unsure, ask: "Do you want me to change your settings to X, or run with your c
 | "Send more per day" / "slow down" | `daily_connection_cap` |
 | "Stop asking me before sending" | `confirm_before_first_send` |
 | "Follow up sooner" / "no follow-ups" | `followup_1_days` / `followup_enabled` |
+| "Stop contacting peers" / "add peers back" | `peer_enabled` |
+| "I studied at X" / "I used to work at Y" | `peer_common_ground` |
+| "Here's my Reslink / CV link" | `pitch_link` |
+| "Email them sooner" / "stop drafting emails" | `no_accept_email_days` / `emails_per_run` |
+| "Only recruiters who hire for data" | `recruiter_focus_keywords` |
 
 **Full ICP change** (e.g. "target marketing agencies, reach the owner"): update `campaign_label`, `finder.search_keywords`, `finder.industry_filter`, `finder.company_size_allow`, and `outreach.persona_tiers` together. See `RETARGETING.md`.
 
@@ -199,7 +218,11 @@ If unsure, ask: "Do you want me to change your settings to X, or run with your c
 ├── last_acceptance_check.json  <- daily acceptance-check cutoff date (gitignored)
 ├── blocked_personas.txt        <- people who hit an unworkable wall (e.g. email verification) (gitignored)
 ├── setup_complete.json         <- per-machine setup marker (gitignored)
+├── seen_jobs.txt               <- job finder de-dup cache (gitignored)
 ├── .claude/skills/             <- AUTHORITATIVE skills (auto-load in Claude Code)
+│   ├── linkedin-job-finder/       (SKILL.md + scripts/append_jobs.py)
+│   ├── linkedin-morning-run/      (SKILL.md only - orchestrates job finder + outreach send)
+│   ├── linkedin-night-run/        (SKILL.md only - orchestrates acceptance check + messages)
 │   ├── linkedin-company-finder/   (SKILL.md + scripts/append_companies.py)
 │   ├── linkedin-connect-outreach/ (SKILL.md + scripts/update_outreach.py)
 │   └── linkedin-message-accepted/ (SKILL.md only - reuses linkedin-connect-outreach's script)

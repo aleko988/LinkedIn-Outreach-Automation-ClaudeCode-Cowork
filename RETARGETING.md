@@ -72,7 +72,19 @@ The only thing that changes the CSV is **adding a new captured field** (a new co
 
 ## Config Reference (every knob, by config key)
 
-### `finder` block
+### `finder` block - job-first search (`linkedin-job-finder`)
+| Config key | Controls | Shipped default |
+|---|---|---|
+| `job_titles` / `job_title_exclude` | titles to search, and title words that rule a posting out (seniority, internships) | analyst titles / Principal, Director, Manager... |
+| `job_markets` | list of `{label, location, geoId}` searched one after another | United States, European Union |
+| `job_remote_only` / `job_posted_within` | remote filter (`f_WT=2`) and recency (`r86400` = 24h) | `true` / `r86400` |
+| `jobs_per_run` | new jobs kept per run | `10` |
+| `job_company_cooldown_days` | skip a company that got a job row this recently, so its recruiters are not flooded | `30` |
+| `candidate_country` / `work_authorization` | where the user lives and what they can legally accept - drives the location-eligibility check | blank / remote only, no sponsorship |
+| `eligibility_reject_phrases` / `eligibility_accept_phrases` | posting text that rules a job out (residency, work-permit, W2) or in (worldwide, EMEA, contractor) | see config |
+| `cv_profile` / `min_cv_fit` | the user's skills, years, seniority, languages, domains, and the fit bar | blank - filled from the CV |
+
+### `finder` block - company search (`linkedin-company-finder`, legacy)
 | Config key | Controls | Shipped default |
 |---|---|---|
 | `search_keywords` | the `keywords=` param (URL-encoded, `+` between words) - a single string, or a **list** of role queries run one after another in the same pass | `Data+Analyst` |
@@ -113,9 +125,21 @@ The only thing that changes the CSV is **adding a new captured field** (a new co
 | `stop_on_weekly_invite_limit` | stop the whole run when LinkedIn caps the week | `true` |
 | `followup_enabled` | run the follow-up pass at all | `true` |
 | `followup_auto_send` | `true` = the skill sends the follow-up itself (LinkedIn messages to existing connections aren't quota-limited, unlike connection notes); `false` = draft and stage it in the dashboard only, for the user to send by hand | `false` |
-| `followup_1_days` / `followup_2_days` | days after send before each scheduled follow-up. **Not consulted at all** for someone who accepted a *plain* connect (no note) - `--due-followups` marks them due immediately (`immediate_no_note: true`), since they never received the personalized content in the first place | `3` / `8` |
+| `followup_1_days` / `followup_2_days` | follow-up 1 is due this many days after the **acceptance** (`accepted_date`; 0 = same day), follow-up 2 this many days after **follow-up 1**. Someone who accepted a *plain* connect (no note) is always due for follow-up 1 right away (`immediate_no_note: true`) | `0` / `4` |
 | `followup_char_limit` | max length of a follow-up message | `400` |
 | `followup_tone` | how follow-ups read | short, useful, one clear ask |
+| `candidates_to_inspect` | how many matching profiles to open per track before picking one | `4` |
+| `recruiter_focus_keywords` | words in a recruiter's headline / About / recent posts that show they hire for your field | data, analytics, BI, tech... |
+| `peer_enabled` | also connect with one peer per company (slot 3, `persona3_*`) | `true` |
+| `peer_tier` | who counts as a peer (`type`, `who`, `keywords`, `function_code`) | Data Analyst / BI Analyst / Analytics Engineer |
+| `peer_common_ground` | the user's `university`, `background`, `past_companies`, `home_country` - used to find peers with a shared link. Blank fields are skipped | all blank |
+| `peer_ask` / `peer_note_example` / `peer_followup_tone` | what the peer note asks (a 15-minute chat), its reference shape, and how the post-accept messages read (call, then the referral loop) | see config |
+| `pitch_link` | CV / video pitch URL (e.g. Reslink) put in the first post-accept message to recruiters and hiring managers - never in a note, never to peers | blank |
+| `job_contacts` | for job rows: per slot, the `role`, `department_keywords` (with a `{job_department}` placeholder) and `general_keywords` fallback | slot 1 Hiring Manager, slot 2 Recruiter |
+| `job_note_example` / `job_followup_tone` / `job_followup_2_tone` | the note and the post-accept messages for job rows (who you are, the role, CV link, ask for feedback) | see config |
+| `cv_attachment` | absolute path to the CV PDF attached to the first message after acceptance on job rows (falls back to `pitch_link` if the upload fails) | blank |
+| `followup_scope` | `job_rows` = only rows with a `job_id` get follow-ups and fallback emails; `all` = every row | `all` |
+| `no_accept_email_days` / `emails_per_run` / `email_tone` | after this many days unaccepted, draft a fallback email (at most N per run) for the user to send themselves | `5` / `10` |
 
 ### Top level
 | Config key | Controls |
@@ -126,6 +150,15 @@ The only thing that changes the CSV is **adding a new captured field** (a new co
 
 ### LinkedIn function codes (for `function_code`)
 `25` Research/Analytics cluster · `13` Engineering · `12` HR/Recruiting · `15` IT · `17` Marketing · `4` Business Development · `10` Finance · `20` Product Management. If unsure, omit the function filter and rely on `keywords` - the search still works, just less precisely.
+
+---
+
+### `about_me` and `followup_2_tone` (outreach block)
+
+| Key | What it does | Default if absent |
+|---|---|---|
+| `about_me` | One first-person line naming what the user actually does. Injected into the connection note (Step 5, compressed) and the post-acceptance message (Step 10, in full). Without it every message is about the company only, and the reader has nothing to reply to. | Empty - the skill writes as if the knob did not exist and never invents a background. |
+| `followup_2_tone` | How the day-8 follow-up reads, separately from follow-up 1. | Falls back to `followup_tone`. |
 
 ---
 
@@ -203,11 +236,12 @@ If the user wants to **start capturing a field that does not exist yet** (e.g. "
 
 - **Swapping who a tier is** (e.g. tier 1 becomes "VP Marketing") is **config-only** - edit `persona_tiers`. No CSV change.
 - **Adding a 5th tier** is also config-only - the skill walks the list in order, whatever its length.
+- **The peer track** uses its own third slot (`persona3_*`) and is switched with `peer_enabled` - it does not count toward `personas_per_company`, which only covers the hiring-manager / recruiter slots.
 - **Contacting more than one person per company**: set `personas_per_company: 2` in the config. This is now fully wired end to end (built via the additive-change procedure above) - here is what exists, for reference:
 
 ### The second-contact columns and the `--persona` flag
 
-The CSV has exactly **two** contact slots per company row today (not an arbitrary N):
+The CSV has **three** contact slots per company row: the primary persona, the second contact (below), and the peer (`persona3_*` - same columns as `persona2_*`, plus `persona3_common_ground`). Every slot also has an `accepted_date` and an `email_draft` column (`accepted_date` / `persona2_accepted_date` / `persona3_accepted_date`, and so on). The first two slots:
 
 | Primary persona column | Second-contact equivalent |
 |---|---|
@@ -218,6 +252,6 @@ The CSV has exactly **two** contact slots per company row today (not an arbitrar
 | `followup_1_message`, `followup_1_date`, `followup_2_message`, `followup_2_date`, `reply_status` | `persona2_followup_1_message`, `persona2_followup_1_date`, `persona2_followup_2_message`, `persona2_followup_2_date`, `persona2_reply_status` |
 | `outreach_status` | *(shared - no per-persona status column; it only ever reflects the primary persona)* |
 
-`update_outreach.py --mark-sent` and `--followup` both take a `--persona 1` (default) or `--persona 2` flag to pick which set of columns they write to (`--data` does not - it is field-name-driven, so address `persona2_reply_status` etc. directly). **The second contact is a fully separate connection request against the exact same `daily_connection_cap` and `note_monthly_limit`** - `--cap-check` and `--note-cap-check` already sum both personas' sends together (a company where both were messaged today counts as 2 toward the daily cap), so nothing needs tracking by hand. `--due-followups` also checks both contacts independently and returns one entry per contact, tagged `"persona": "1"` or `"2"`.
+`update_outreach.py --mark-sent`, `--result` and `--followup` all take a `--persona 1` (default), `--persona 2` or `--persona 3` flag to pick which set of columns they write to (`--data` does not - it is field-name-driven, so address `persona2_reply_status` etc. directly). **The second contact is a fully separate connection request against the exact same `daily_connection_cap` and `note_monthly_limit`** - `--cap-check` and `--note-cap-check` already sum both personas' sends together (a company where both were messaged today counts as 2 toward the daily cap), so nothing needs tracking by hand. `--due-followups` also checks both contacts independently and returns one entry per contact, tagged `"persona": "1"` or `"2"`.
 
-**Going past 2 contacts per company** would need a third set of columns (`persona3_*`) added the same way, plus a `--persona 3` case in the script - follow the additive-change procedure above and extend `--persona`'s `choices` list.
+**Going past 3 contacts per company** would need a fourth set of columns (`persona4_*`) added the same way - extend `PERSONAS` in `update_outreach.py`, `CONTACT_SLOTS` in `dashboard/app.py`, and follow the additive-change procedure above.

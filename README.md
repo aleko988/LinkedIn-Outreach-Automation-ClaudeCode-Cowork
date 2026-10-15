@@ -5,18 +5,23 @@ A local, agent-run outreach tracker. Two Claude skills find the right companies,
 Everything is local: one CSV, no database, no cloud, no third-party API.
 
 ```
-find companies  ->  find the person  ->  write the note  ->  send  ->  follow up
-   (skill 1)         (skill 2)          (<= 200 chars)     (capped)   (day 3, day 8)
+find companies  ->  find 3 people   ->  write the note  ->  send  ->  follow up
+   (skill 1)      (manager, recruiter,   (<= 200 chars)     (capped)   (same day as accept, +4 days)
+                   peer - skill 2)
 ```
+
+**The networking method.** Applying online alone gets little visibility, so every company is worked on three tracks: the **hiring manager** (the person directly above the role), a **recruiter** who is verified to hire for your field, and a **peer** on the team found through common ground (same university, background or department) who is asked for a 15-minute chat. Every contact gets a connection request with a note - never InMail. People who accept get a message the same day (with your CV/video `pitch_link` for recruiters and managers) and one reminder 4 days later. People who never accept get a fallback email drafted for you to send.
 
 ## What you get
 
 | | |
 |---|---|
+| **`/linkedin-job-finder`** | Finds analyst job postings that fit your CV (US + Europe), keeps only remote roles you can take from your country, and saves one row per job with its department and hiring team. |
+| **`/linkedin-morning-run`** / **`/linkedin-night-run`** | The two schedules: morning = find today's jobs and send requests to each job's department hiring manager and recruiter; night = record acceptances and message each new connection about the role with your CV link. |
 | **`/linkedin-company-finder`** | Searches LinkedIn for companies matching your ICP, qualifies them by industry and size, records a "why now" signal, and appends them to the tracker in a weekly bucket. |
 | **`/linkedin-connect-outreach`** | Walks your persona tiers to find the right person at each company, writes a note under the character limit, sends the connection request with pacing and a daily cap, and records the result. Runs the daily acceptance check and follow-up pass too. |
 | **`/linkedin-message-accepted`** | Messages everyone already accepted with no message yet, or due for a follow-up - on demand, without a full find-and-send cycle. |
-| **Dashboard** (port 5002) | The weekly sheet - company, profile, persona, request sent, follow up - plus a ready-to-send queue, an awaiting-message queue, a follow-up-due queue, acceptance rate, and today's remaining cap. |
+| **Dashboard** (port 5002) | The weekly sheet - company, every contact (manager, recruiter, peer), request sent, follow up - plus a ready-to-send queue, an awaiting-message queue, a follow-up-due queue, a try-email queue, acceptance rate, and today's remaining cap. |
 
 ## Setup
 
