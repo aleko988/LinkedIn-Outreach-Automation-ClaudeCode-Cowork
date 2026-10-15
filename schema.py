@@ -4,7 +4,7 @@ schema.py - THE single source of truth for the connection tracker CSV.
 
 There is exactly ONE data file in this project: connections.csv in the project root.
 Its columns are defined here, in one place, and NOWHERE else. The dashboard, the
-company-finder skill, and the connect-outreach skill all conform to this list. If a
+job-finder skill, and the connect-outreach skill all conform to this list. If a
 column genuinely needs to change, edit it HERE and only here.
 
 Why this file exists
@@ -123,7 +123,7 @@ CANONICAL_COLUMNS = [
     "notes",
 ]
 
-# Columns the company-finder skill is responsible for populating.
+# Columns the job-finder skill is responsible for populating.
 FINDER_COLUMNS = CANONICAL_COLUMNS[:CANONICAL_COLUMNS.index("outreach_status") + 1]
 
 # Columns the connect-outreach skill is responsible for populating.

@@ -31,12 +31,6 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(ROOT, "dist", "linkedin-connect-outreach.plugin")
 
 SKILLS = {
-    "linkedin-company-finder": {
-        "title": "LinkedIn Company Finder",
-        "description": "Find companies on LinkedIn matching your configured ideal-customer profile and save them to the local tracker. Use when asked to find companies, build a prospect list, find leads, look for new accounts, or when a scheduled prospecting run fires.",
-        "script": "append_companies.py",
-        "script_step": "the CSV-save step",
-    },
     "linkedin-connect-outreach": {
         "title": "LinkedIn Connect Outreach",
         "description": "Find the right person at each tracked company, write a connection note of 200 characters or less, send the request under a daily cap, and record the result. Also handles follow-ups. Use when asked to find people, send connection requests, add people on LinkedIn, or write outreach notes.",
@@ -75,13 +69,13 @@ SKILLS = {
 PLUGIN_JSON = {
     "name": "linkedin-connect-outreach",
     "version": "0.1.0",
-    "description": "Thin-launcher plugin: adds the LinkedIn company finder + connect outreach skills to Cowork. Delegates to the project's live skills and outreach_config.json, so targeting changes need no reinstall or rebuild.",
+    "description": "Thin-launcher plugin: adds the LinkedIn job finder, connect outreach and scheduled run skills to Cowork. Delegates to the project's live skills and outreach_config.json, so targeting changes need no reinstall or rebuild.",
     "keywords": ["linkedin", "outreach", "prospecting", "crm", "connections"],
 }
 
 PLUGIN_README = """# LinkedIn Connect Outreach - Cowork plugin (thin launchers)
 
-This plugin adds the **company finder** and **connect outreach** skills to the Cowork panel.
+This plugin adds the **job finder**, **connect outreach**, **morning/night run** and **message accepted** skills to the Cowork panel.
 
 **It deliberately contains no copy of the skill logic.** Each skill here is a thin
 launcher that finds your shared project folder (`Projects/linkedin-connect-outreach`)

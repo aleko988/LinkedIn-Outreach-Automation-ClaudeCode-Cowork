@@ -53,7 +53,7 @@ Breaking any of these is the failure mode that gets a LinkedIn account restricte
 - **Schema (column definitions)**: `{project_root}/schema.py`
 - **Script path**: `<this skill's directory>/scripts/update_outreach.py`
 - **Process rows where**: `persona_name` is blank - regardless of `outreach_status` or how long ago the company was added. This is keyed on the data, not the date: a company added weeks ago that never got a persona is still picked up. **Always process anything not yet processed.**
-- **Blocked-personas cache**: `{project_root}/blocked_personas.txt` - profiles that hit a wall this project cannot work around (see Step 7c) and must never be picked as a candidate again. Load it before Step 3, same as the finder loads `seen_companies.txt`.
+- **Blocked-personas cache**: `{project_root}/blocked_personas.txt` - profiles that hit a wall this project cannot work around (see Step 7c) and must never be picked as a candidate again. Load it before Step 3, same as the job finder loads `seen_jobs.txt`.
 
 ---
 

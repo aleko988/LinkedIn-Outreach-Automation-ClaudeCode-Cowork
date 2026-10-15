@@ -84,7 +84,7 @@ The only thing that changes the CSV is **adding a new captured field** (a new co
 | `eligibility_reject_phrases` / `eligibility_accept_phrases` | posting text that rules a job out (residency, work-permit, W2) or in (worldwide, EMEA, contractor) | see config |
 | `cv_profile` / `min_cv_fit` | the user's skills, years, seniority, languages, domains, and the fit bar | blank - filled from the CV |
 
-### `finder` block - company search (`linkedin-company-finder`, legacy)
+### `finder` block - company search (legacy - the company-finder skill was removed; these keys are unused)
 | Config key | Controls | Shipped default |
 |---|---|---|
 | `search_keywords` | the `keywords=` param (URL-encoded, `+` between words) - a single string, or a **list** of role queries run one after another in the same pass | `Data+Analyst` |

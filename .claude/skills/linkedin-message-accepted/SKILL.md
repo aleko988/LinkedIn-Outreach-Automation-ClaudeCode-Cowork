@@ -50,7 +50,7 @@ If `{followup_auto_send}` is false, record the message and stop there - it shows
 ## What this skill does NOT do
 
 - **Does not check LinkedIn's Connections page for brand-new acceptances.** That is Step 8 of `linkedin-connect-outreach/SKILL.md` (the daily acceptance-check pass, Step 11) - run that first (or rely on the daily schedule) if new acceptances haven't been picked up yet. This skill only acts on acceptances already recorded in `connections.csv`.
-- **Does not find new companies, find new people, or send new connection requests.** For that, use `linkedin-company-finder` and `linkedin-connect-outreach`.
+- **Does not find new companies, find new people, or send new connection requests.** For that, use `linkedin-job-finder` and `linkedin-connect-outreach` (or the `linkedin-morning-run`).
 
 ## Edge cases
 

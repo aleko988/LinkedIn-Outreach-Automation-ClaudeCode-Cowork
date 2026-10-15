@@ -26,7 +26,7 @@ There is **exactly one** data file in this project: **`connections.csv`** in the
 
 - **Never** create a second CSV. Never write outreach data to any other filename. Never write to a template, backup, or "example" file - there is no example file.
 - The column layout is defined **once** in `schema.py`. Do not invent columns or reorder them. If a column genuinely needs to change, edit `schema.py` and nothing else.
-- Both skills write through helper scripts (`append_companies.py`, `update_outreach.py`) that **physically refuse** any `--csv` path whose filename is not `connections.csv`, and that always preserve the existing header.
+- The skills write through helper scripts (`append_jobs.py`, `update_outreach.py`) that **physically refuse** any `--csv` path whose filename is not `connections.csv`, and that always preserve the existing header.
 - If `connections.csv` does not exist, create it with `python schema.py`. Do not hand-roll a CSV.
 
 ## The two safety limits (read before sending anything)
@@ -93,8 +93,9 @@ This creates an empty `connections.csv` with the correct columns. It will not ov
 
 ### 3. Skills
 
-**Claude Code:** the three skills in `.claude/skills/` auto-load. The user already has:
-- `/linkedin-company-finder` - finds new companies matching the ICP
+**Claude Code:** the skills in `.claude/skills/` auto-load. The user already has:
+- `/linkedin-job-finder` - finds job postings that fit the CV and the user's location
+- `/linkedin-morning-run` / `/linkedin-night-run` - the two scheduled runs (find jobs + send; check acceptances + message)
 - `/linkedin-connect-outreach` - finds the right person, writes the note, sends the request
 - `/linkedin-message-accepted` - messages everyone already accepted with no message yet, or due for a follow-up, without a full find-and-send cycle
 
@@ -119,7 +120,7 @@ Before the first outreach run, tell the user in plain language what will happen:
 ## How the skills work together
 
 0. **Job finder (the current campaign's entry point)** searches LinkedIn Jobs for analyst roles that fit the user's CV (`finder.cv_profile`) in the configured markets, keeps only **remote jobs the user can legally take from `candidate_country`** (no relocation, no sponsorship), records the job's department and its "Meet the hiring team" people, and appends **one row per job** (`company_id` = `<company-slug>--<job_id>`, job columns filled). Then the outreach skill (Step 3j) contacts that department's hiring manager and recruiter, falling back to general data managers / recruiters / talent acquisition. The **morning run** skill chains job finder -> outreach send; the **night run** skill records acceptances and sends each new connection the "who I am, this role, my CV, would appreciate feedback" message. Legacy company-only rows get no more follow-ups (`followup_scope: job_rows`).
-1. **Company finder** (legacy company-first mode) searches LinkedIn for companies matching the ICP and **appends** them as new rows to `connections.csv` (finder columns filled, outreach columns blank). It de-dups by company slug using `seen_companies.txt` and stamps a `week` bucket.
+1. **Company finder (removed 2026-10-15).** The old company-first finder skill was retired in favor of the job finder. The 138 company-only rows it created stay in `connections.csv` (forward-only); `seen_companies.txt` is kept as their history. Its git history has the skill if company-first search is ever wanted again.
 2. **Connect outreach** works **three networking tracks** per company - the hiring manager, a recruiter verified to hire for the field, and (if `peer_enabled`) a peer on the team found through common ground (same university, background or department), stored in a third contact slot `persona3_*`. It scans `connections.csv` for **any row where `persona_name` is blank** - regardless of `outreach_status` or how long ago it was added - plus older companies with no peer yet, finds the right person per the configured tiers, writes a note of 200 characters or less, sends the request under the daily cap and monthly note quota, and records the result. It also runs the daily acceptance-check pass (Step 11: checks LinkedIn's Connections page for new acceptances) and the **follow-up pass**: accepted connections with no reply get messaged immediately if they never received a note, otherwise follow-up 1 on the day the acceptance is detected and follow-up 2 four days after that (both configurable), with the `pitch_link` (CV / video pitch) in the first message to recruiters and hiring managers. Requests that sit unaccepted for `no_accept_email_days` get a fallback email **drafted** (Step 12) - the user finds the address and sends it; the skill never sends email.
 3. **Message accepted connections** is a lighter, on-demand entry point into just the follow-up pass - message everyone already accepted with no message yet, without re-checking for new acceptances or running the full find-and-send cycle. Use it to clear the dashboard's "Awaiting message" tab right now, rather than waiting for the daily schedule.
 4. The **dashboard** reads `connections.csv` and renders it as the weekly sheet: company, profile, persona, request sent, follow up - plus tabs for who's awaiting a message vs. already messaged.
@@ -139,7 +140,7 @@ These **replace** the older daily send-pass and acceptance-check tasks below - r
 
 ### Company finding: on-demand only for this campaign
 
-Finding new companies (`linkedin-company-finder`) is currently **not** wired into a schedule - the user adds companies to `connections.csv` manually/separately, and the scheduled tasks below only work through that existing backlog. If asked to schedule company-finding again, the original combined pattern still works: *"Use the LinkedIn Company Finder skill to find new companies. When that finishes, use the LinkedIn Connect Outreach skill to find the right person at each and draft notes."*
+The company-finder skill has been removed (see above). The older tasks below are kept for reference only - they belong to the company-first campaign and should be disabled now that the morning/night runs exist.
 
 ### Daily send pass: persona + note + send, on the existing backlog
 
@@ -214,7 +215,7 @@ If unsure, ask: "Do you want me to change your settings to X, or run with your c
 ├── RETARGETING.md              <- how to change/add campaign knobs
 ├── outreach_config.example.json <- shipped default knobs (committed; the fallback)
 ├── outreach_config.json        <- live user settings (gitignored; skills load this)
-├── seen_companies.txt          <- finder de-dup cache (gitignored)
+├── seen_companies.txt          <- de-dup cache of the retired company finder (gitignored, kept as history)
 ├── last_acceptance_check.json  <- daily acceptance-check cutoff date (gitignored)
 ├── blocked_personas.txt        <- people who hit an unworkable wall (e.g. email verification) (gitignored)
 ├── setup_complete.json         <- per-machine setup marker (gitignored)
@@ -223,7 +224,6 @@ If unsure, ask: "Do you want me to change your settings to X, or run with your c
 │   ├── linkedin-job-finder/       (SKILL.md + scripts/append_jobs.py)
 │   ├── linkedin-morning-run/      (SKILL.md only - orchestrates job finder + outreach send)
 │   ├── linkedin-night-run/        (SKILL.md only - orchestrates acceptance check + messages)
-│   ├── linkedin-company-finder/   (SKILL.md + scripts/append_companies.py)
 │   ├── linkedin-connect-outreach/ (SKILL.md + scripts/update_outreach.py)
 │   └── linkedin-message-accepted/ (SKILL.md only - reuses linkedin-connect-outreach's script)
 ├── dist/
