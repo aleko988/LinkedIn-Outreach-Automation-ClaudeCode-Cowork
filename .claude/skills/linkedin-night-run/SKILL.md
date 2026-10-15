@@ -7,9 +7,9 @@ description: The scheduled NIGHT run of the job search - check which connection 
 
 > **FORMATTING RULE - NO EM DASHES:** Never use em dashes anywhere in any output. Use a regular hyphen (-) instead.
 
-This skill is an **orchestrator only**. All logic lives in `{project_root}/.claude/skills/linkedin-connect-outreach/SKILL.md`; this file only says which of its steps to run, in which order. It never finds jobs and never sends new connection requests.
+This skill is an **orchestrator only**. All logic lives in `{project_root}/engine/OUTREACH_STEPS.md` (the outreach engine); this file only says which of its steps to run, in which order. It never finds jobs and never sends new connection requests.
 
-(`{project_root}`: the folder containing `schema.py`; `python "{project_root}/.claude/skills/linkedin-connect-outreach/scripts/update_outreach.py" --print-root` prints it.)
+(`{project_root}`: the folder containing `schema.py`; `python "{project_root}/engine/update_outreach.py" --print-root` prints it.)
 
 ---
 

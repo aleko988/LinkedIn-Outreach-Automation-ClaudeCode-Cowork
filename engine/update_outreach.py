@@ -75,9 +75,9 @@ from datetime import date, datetime
 def find_project_root() -> str:
     """Locate the project root deterministically, independent of the CWD.
 
-    This script lives at <root>/.claude/skills/<skill>/scripts/update_outreach.py, so
-    the project root is four directories up. We confirm with schema.py (the project
-    marker), then walk upward as a fallback, and finally fall back to the CWD. This
+    This script lives at <root>/engine/update_outreach.py. We first try four directories
+    up (its old .claude/skills/<skill>/scripts/ home), then walk upward until we find
+    schema.py (the project marker), and finally fall back to the CWD. This
     lets a scheduled run update the right tracker from any working directory.
     """
     here = os.path.dirname(os.path.abspath(__file__))

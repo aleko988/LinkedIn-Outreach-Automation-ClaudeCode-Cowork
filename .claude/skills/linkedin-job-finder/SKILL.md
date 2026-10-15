@@ -7,7 +7,7 @@ description: Find new LinkedIn job postings that match the user's CV (analyst ro
 
 > **FORMATTING RULE - NO EM DASHES:** Never use em dashes anywhere in any output. Use a regular hyphen (-) instead.
 
-Job-first outreach: instead of contacting people at companies that may not be hiring, this skill finds **specific open postings** that fit the user's CV and that the user can actually take from where they live. Each kept posting becomes one row in `connections.csv`; the `linkedin-connect-outreach` skill then finds that role's hiring manager and recruiter.
+Job-first outreach: instead of contacting people at companies that may not be hiring, this skill finds **specific open postings** that fit the user's CV and that the user can actually take from where they live. Each kept posting becomes one row in `connections.csv`; the outreach engine (`engine/OUTREACH_STEPS.md`, run by `linkedin-morning-run`) then finds that role's hiring manager and recruiter.
 
 The skill text names no job title, country or skill - everything is a `{code-word}` from the `finder` block of the outreach config.
 

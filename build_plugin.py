@@ -31,51 +31,36 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(ROOT, "dist", "linkedin-connect-outreach.plugin")
 
 SKILLS = {
-    "linkedin-connect-outreach": {
-        "title": "LinkedIn Connect Outreach",
-        "description": "Find the right person at each tracked company, write a connection note of 200 characters or less, send the request under a daily cap, and record the result. Also handles follow-ups. Use when asked to find people, send connection requests, add people on LinkedIn, or write outreach notes.",
-        "script": "update_outreach.py",
-        "script_step": "the note-validation, send-cap and CSV-update steps",
-    },
     "linkedin-job-finder": {
         "title": "LinkedIn Job Finder",
         "description": "Find new LinkedIn analyst job postings that match your CV and that you can take from your country, and save each job to the local tracker. Use when asked to find jobs or vacancies, or when the scheduled morning run fires.",
-        "script": "append_jobs.py",
+        "script_path": ".claude/skills/linkedin-job-finder/scripts/append_jobs.py",
         "script_step": "the job-save step",
     },
     "linkedin-morning-run": {
         "title": "LinkedIn Morning Run",
         "description": "Scheduled morning run: find today's matching jobs, then send connection requests to each job's department hiring manager and recruiter under the daily cap. Use when the morning schedule fires or when asked to run the morning job search.",
-        "script": "update_outreach.py",
-        "script_dir": "linkedin-connect-outreach",
+        "script_path": "engine/update_outreach.py",
         "script_step": "the send-cap and CSV-update steps",
     },
     "linkedin-night-run": {
         "title": "LinkedIn Night Run",
         "description": "Scheduled night run: record today's accepted connection requests and message each new connection about the specific role with your CV attached. Use when the night schedule fires or when asked to check who accepted and message them.",
-        "script": "update_outreach.py",
-        "script_dir": "linkedin-connect-outreach",
+        "script_path": "engine/update_outreach.py",
         "script_step": "the acceptance-check, due-followups and CSV-update steps",
-    },
-    "linkedin-message-accepted": {
-        "title": "LinkedIn Message Accepted Connections",
-        "description": "Message everyone who accepted a connection request but has no message yet, or is due for their next follow-up - without running a full find-companies-and-send-requests cycle. Use when asked to message people who accepted, catch up with new connections, or clear the Awaiting message queue.",
-        "script": "update_outreach.py",
-        "script_dir": "linkedin-connect-outreach",  # reuses the connect-outreach skill's script - no duplicate copy
-        "script_step": "the due-followups lookup and CSV-update steps",
     },
 }
 
 PLUGIN_JSON = {
     "name": "linkedin-connect-outreach",
     "version": "0.1.0",
-    "description": "Thin-launcher plugin: adds the LinkedIn job finder, connect outreach and scheduled run skills to Cowork. Delegates to the project's live skills and outreach_config.json, so targeting changes need no reinstall or rebuild.",
+    "description": "Thin-launcher plugin: adds the LinkedIn job finder and the morning/night run skills to Cowork. Delegates to the project's live skills and outreach_config.json, so targeting changes need no reinstall or rebuild.",
     "keywords": ["linkedin", "outreach", "prospecting", "crm", "connections"],
 }
 
 PLUGIN_README = """# LinkedIn Connect Outreach - Cowork plugin (thin launchers)
 
-This plugin adds the **job finder**, **connect outreach**, **morning/night run** and **message accepted** skills to the Cowork panel.
+This plugin adds the **job finder**, **morning run** and **night run** skills to the Cowork panel.
 
 **It deliberately contains no copy of the skill logic.** Each skill here is a thin
 launcher that finds your shared project folder (`Projects/linkedin-connect-outreach`)
@@ -146,7 +131,7 @@ Read the full instructions from:
 Follow every step in that file exactly. Use `{{PROJECT_ROOT}}` wherever the instructions
 reference `{{project_root}}`. The helper-script path for {meta['script_step']} is:
 ```
-{{PROJECT_ROOT}}/.claude/skills/{meta.get('script_dir', name)}/scripts/{meta['script']}
+{{PROJECT_ROOT}}/{meta['script_path']}
 ```
 That script loads `{{PROJECT_ROOT}}/outreach_config.json` (the current knobs) at the start
 of the run, so whatever the user last set is what gets used - no rebuild needed. It also

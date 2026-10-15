@@ -1,9 +1,6 @@
----
-name: linkedin-connect-outreach
-description: For each company in the tracker, work three networking tracks - the hiring manager, a recruiter verified to hire for your field, and a peer on the team found through common ground - (tiers set by your outreach config), write a connection note of 200 characters or less, send the connection request under a daily cap and a monthly note-budget (for accounts without LinkedIn Premium), and record the result. Also handles follow-up messages after a request is accepted (auto-send or draft-only, per config) and a lightweight daily pass to catch new acceptances. Use this skill when asked to find people, send connection requests, add people on LinkedIn, write outreach notes, check who accepted, or follow up with accepted connections.
----
+# Outreach engine - the step-by-step playbook
 
-# LinkedIn Connect Outreach
+> **This is not a skill on its own.** It is the shared playbook the three skills run: `linkedin-morning-run` follows Steps 0-9 (find each job's hiring manager and recruiter, write the note, send), `linkedin-night-run` follows Steps 8, 10 and 12 (record acceptances, message with the CV, draft fallback emails). Keeping it in one file means the two schedules can never drift apart. Where this file says "this skill", read "the run that is following these steps".
 
 > **FORMATTING RULE - NO EM DASHES:** Never use em dashes anywhere in any output - not in connection notes, follow-ups, reports, or any other text. Use a regular hyphen (-) instead. This applies to every piece of text this skill generates, without exception.
 
@@ -48,10 +45,10 @@ Breaking any of these is the failure mode that gets a LinkedIn account restricte
 
 ## Configuration
 
-- **Project root**: auto-located by the helper script - it walks up from its own location to find the folder containing `schema.py`. Get it with `python "<this skill's dir>/scripts/update_outreach.py" --print-root`.
+- **Project root**: auto-located by the helper script - it walks up from its own location to find the folder containing `schema.py`. Get it with `python "{project_root}/engine/update_outreach.py" --print-root`.
 - **Master CSV path** (the only data file): `{project_root}/connections.csv`
 - **Schema (column definitions)**: `{project_root}/schema.py`
-- **Script path**: `<this skill's directory>/scripts/update_outreach.py`
+- **Script path**: `{project_root}/engine/update_outreach.py`
 - **Process rows where**: `persona_name` is blank - regardless of `outreach_status` or how long ago the company was added. This is keyed on the data, not the date: a company added weeks ago that never got a persona is still picked up. **Always process anything not yet processed.**
 - **Blocked-personas cache**: `{project_root}/blocked_personas.txt` - profiles that hit a wall this project cannot work around (see Step 7c) and must never be picked as a candidate again. Load it before Step 3, same as the job finder loads `seen_jobs.txt`.
 
@@ -137,7 +134,7 @@ For each selected row, take: `company_id`, `company_name`, `linkedin_company_url
 ## Step 2 - Check the daily cap before doing any work
 
 ```bash
-python "<this skill's dir>/scripts/update_outreach.py" --cap-check
+python "{project_root}/engine/update_outreach.py" --cap-check
 ```
 
 This prints `{"cap": N, "sent_today": N, "remaining": N}`. If `remaining` is 0, do **not** start a sending run: tell the user the cap is already used up today, and offer to draft notes without sending (Steps 3 to 5, then stop before Step 6). Otherwise you may process at most `remaining` companies through to a send this run.
@@ -147,7 +144,7 @@ This prints `{"cap": N, "sent_today": N, "remaining": N}`. If `remaining` is 0, 
 ## Step 2b - Check the monthly note budget before doing any work
 
 ```bash
-python "<this skill's dir>/scripts/update_outreach.py" --note-cap-check
+python "{project_root}/engine/update_outreach.py" --note-cap-check
 ```
 
 This prints `{"note_cap": N, "notes_used_this_month": N, "notes_remaining": N}`. Remember `notes_remaining` for this run - it is how many of the sends below may include a personalized note. **This never blocks the run.** Once `notes_remaining` hits 0, every further company in this run still gets a note drafted (Step 5, for the record and in case you want to send it by hand) but is sent as a **plain connect** in Step 7c. Decrement your own running count of `notes_remaining` by 1 each time you actually send with a note, so you do not overshoot before the script's own check catches it in Step 7c.
@@ -281,8 +278,8 @@ Record: `persona_name`, `persona_title` (their headline), `persona_linkedin` (`h
 
 **The peer (slot 3, if `{peer_enabled}`)** goes in `persona3_name`, `persona3_title`, `persona3_linkedin`, `persona3_tier` (`{peer_tier.type}`), and `persona3_common_ground` (the shared link from Step 3b, in a few words). If the peer is **already a 1st-degree connection**, skip Steps 5 to 7 for them and record them as accepted right away - this costs nothing against the daily cap or note quota, and puts them straight into the Step 10 message queue:
 ```bash
-python "<this skill's dir>/scripts/update_outreach.py" --company_id "{company_id}" --data '{"persona3_name": "...", "persona3_title": "...", "persona3_linkedin": "...", "persona3_tier": "...", "persona3_common_ground": "Already connected (1st degree)"}'
-python "<this skill's dir>/scripts/update_outreach.py" --company_id "{company_id}" --persona 3 --result Accepted
+python "{project_root}/engine/update_outreach.py" --company_id "{company_id}" --data '{"persona3_name": "...", "persona3_title": "...", "persona3_linkedin": "...", "persona3_tier": "...", "persona3_common_ground": "Already connected (1st degree)"}'
+python "{project_root}/engine/update_outreach.py" --company_id "{company_id}" --persona 3 --result Accepted
 ```
 
 If **no** person is found at any tier, follow `{skip_if_no_persona}`: `keep` leaves the row with a blank persona (it will be retried next run); `delete` removes the row via the script's `--delete` mode.
@@ -320,7 +317,7 @@ Passive and generic - three banned phrases, no specific angle, no low-pressure c
 
 Save the note with:
 ```bash
-python "<this skill's dir>/scripts/update_outreach.py" --company_id "{company_id}" --data '{"persona_name": "...", "persona_title": "...", "persona_linkedin": "...", "persona_tier": "...", "persona_location": "...", "persona_mutuals": "...", "connection_note": "..."}'
+python "{project_root}/engine/update_outreach.py" --company_id "{company_id}" --data '{"persona_name": "...", "persona_title": "...", "persona_linkedin": "...", "persona_tier": "...", "persona_location": "...", "persona_mutuals": "...", "connection_note": "..."}'
 ```
 The script validates the length, writes `note_char_count`, and sets `outreach_status` to `Note drafted`. **If it refuses, rewrite the note shorter - do not truncate it mid-sentence and do not edit the CSV by hand.**
 
@@ -353,7 +350,7 @@ For each queued person, in order. **A company with several contacts queues each 
 ### 7a - Check the cap first, every single time
 
 ```bash
-python "<this skill's dir>/scripts/update_outreach.py" --cap-check
+python "{project_root}/engine/update_outreach.py" --cap-check
 ```
 If `remaining` is 0, stop sending immediately, leave the remaining rows at `Note drafted`, and go to Step 9.
 
@@ -409,7 +406,7 @@ await (async () => {
 
 1. **Blocklist them and clear the row** so the company gets retried with someone else next run, instead of being permanently stuck on a contact that can never be sent:
    ```bash
-   python "<this skill's dir>/scripts/update_outreach.py" --company_id "{company_id}" --block-persona "{persona_linkedin}" --data '{"persona_name": "", "persona_title": "", "persona_linkedin": "", "persona_tier": "", "persona_location": "", "persona_mutuals": "", "connection_note": "", "note_char_count": "", "note_sent_with_request": "", "outreach_status": "Not started", "notes": "Skipped <name> - LinkedIn required recipient email verification; retried with a different contact."}'
+   python "{project_root}/engine/update_outreach.py" --company_id "{company_id}" --block-persona "{persona_linkedin}" --data '{"persona_name": "", "persona_title": "", "persona_linkedin": "", "persona_tier": "", "persona_location": "", "persona_mutuals": "", "connection_note": "", "note_char_count": "", "note_sent_with_request": "", "outreach_status": "Not started", "notes": "Skipped <name> - LinkedIn required recipient email verification; retried with a different contact."}'
    ```
    This does not count against the daily cap or the note quota, and it does not consume this company's slot in the run - if time remains, go back to Step 3 for this same company now and try the next candidate/tier (blocked_personas.txt already excludes this person); otherwise it will be picked up fresh on the next run since `persona_name` is blank again.
 2. Move to the next queued person.
@@ -443,13 +440,13 @@ If a modal appears saying you have reached the **weekly invitation limit**, or o
 ### 7e - Record the send
 
 ```bash
-python "<this skill's dir>/scripts/update_outreach.py" --company_id "{company_id}" --mark-sent --note-used yes|no
+python "{project_root}/engine/update_outreach.py" --company_id "{company_id}" --mark-sent --note-used yes|no
 ```
 Pass `--note-used yes` if the invite actually went out with the note, `--note-used no` if it went out plain (including the note-textarea-failed fallback in 7c). This sets `connection_sent = Yes`, `date_sent` to today, `connection_result = Sent`, `outreach_status = Request sent`, `note_sent_with_request` accordingly, and re-checks both the daily cap and (when `--note-used yes`) the monthly note quota - it **refuses** the write if either is already used, which is the backstop if 7a or your own `notes_remaining` tracking was skipped. If it refuses on the note quota specifically, re-run with `--note-used no` - the request may already be sitting in the "sent" state in the browser regardless of the note, so do not leave the row unrecorded.
 
 **Sending to the second contact:** add `--persona 2` to the same command:
 ```bash
-python "<this skill's dir>/scripts/update_outreach.py" --company_id "{company_id}" --persona 2 --mark-sent --note-used yes|no
+python "{project_root}/engine/update_outreach.py" --company_id "{company_id}" --persona 2 --mark-sent --note-used yes|no
 ```
 This writes `persona2_connection_sent`, `persona2_date_sent`, `persona2_connection_result`, `persona2_note_sent_with_request`, and `persona2_last_action_date` instead of the primary columns - it does **not** touch `outreach_status` (there is no per-persona status column; that field only ever reflects the primary persona). It counts as its own request against the **same** daily cap and monthly note quota as the primary persona - `--cap-check` and `--note-cap-check` already add every contact together, so there is nothing extra to track by hand.
 
@@ -468,7 +465,7 @@ Do this whenever the user asks to check replies, at the start of a later find-an
 ### 8a - Get the cutoff date
 
 ```bash
-python "<this skill's dir>/scripts/update_outreach.py" --acceptance-check-status
+python "{project_root}/engine/update_outreach.py" --acceptance-check-status
 ```
 This prints `{"last_checked_date": "YYYY-MM-DD"}` - everyone connected on or before that date was already seen on a previous check.
 
@@ -483,7 +480,7 @@ Run the **page-ready gate**, then read entries from the top. Each shows a name, 
 For each newly-connected entry (dated after the cutoff), look for a row in `connections.csv` where `persona_linkedin`, `persona2_linkedin` or `persona3_linkedin` matches this profile's URL and that contact's result (`connection_result` / `persona2_connection_result` / `persona3_connection_result`) is not already `Accepted`. Match on the profile path (the `/in/<slug>` part), not the display name - names can collide.
 
 ```bash
-python "<this skill's dir>/scripts/update_outreach.py" --company_id "{company_id}" --persona 1|2|3 --result Accepted
+python "{project_root}/engine/update_outreach.py" --company_id "{company_id}" --persona 1|2|3 --result Accepted
 ```
 Pass the `--persona` of the column that matched (1 = `persona_linkedin`, 2 = `persona2_linkedin`, 3 = `persona3_linkedin`). Valid values: `Sent`, `Pending`, `Accepted`, `Ignored`, `Withdrawn`, `Failed`, `Emailed`. `Accepted` stamps that contact's `accepted_date` (which starts the follow-up clock) and, for the primary contact, moves `outreach_status` to `Accepted`.
 
@@ -493,7 +490,7 @@ A newly-connected entry that matches no row in the tracker is someone the user c
 
 Once every new entry from 8b has been checked against the tracker, advance the cutoff so tomorrow's check does not re-read the same names:
 ```bash
-python "<this skill's dir>/scripts/update_outreach.py" --mark-checked
+python "{project_root}/engine/update_outreach.py" --mark-checked
 ```
 Only do this after 8c has actually run to completion for this pass - if the pass was interrupted partway through, leave the cutoff where it was so nothing gets skipped next time.
 
@@ -528,7 +525,7 @@ No persona found: 1 company (Vela Systems - People tab is gated).
 Only if `{followup_enabled}` is true. Ask the script who is due:
 
 ```bash
-python "<this skill's dir>/scripts/update_outreach.py" --due-followups
+python "{project_root}/engine/update_outreach.py" --due-followups
 ```
 
 This returns a list of `{company_id, company_name, persona, persona_name, persona_tier, persona_linkedin, followup, days_since_accepted, immediate_no_note}` entries - one per **contact**, not per company, so a company with several accepted contacts can produce several entries. `persona` is `"1"`, `"2"` or `"3"` (the peer), telling you which contact's fields to use and write back to. It never returns anyone who already replied.
@@ -548,7 +545,7 @@ This returns a list of `{company_id, company_name, persona, persona_name, person
 
 **Record it, using the entry's `--persona`:**
 ```bash
-python "<this skill's dir>/scripts/update_outreach.py" --company_id "{company_id}" --followup 1 --message "..." [--persona 2|3]
+python "{project_root}/engine/update_outreach.py" --company_id "{company_id}" --followup 1 --message "..." [--persona 2|3]
 ```
 This writes the message and `followup_1_date`/`followup_2_date` (or the `persona2_` equivalents) regardless of `{followup_auto_send}` - the CSV record of "a follow-up is due and has been written" is separate from whether it was actually sent.
 
@@ -564,9 +561,9 @@ This writes the message and `followup_1_date`/`followup_2_date` (or the `persona
 
 If someone replies, record it and stop the sequence - `--data` is field-name-driven, not `--persona`-driven, so name the field directly:
 ```bash
-python "<this skill's dir>/scripts/update_outreach.py" --company_id "{company_id}" --data '{"reply_status": "Positive"}'
-python "<this skill's dir>/scripts/update_outreach.py" --company_id "{company_id}" --data '{"persona2_reply_status": "Positive"}'
-python "<this skill's dir>/scripts/update_outreach.py" --company_id "{company_id}" --data '{"persona3_reply_status": "Positive"}'
+python "{project_root}/engine/update_outreach.py" --company_id "{company_id}" --data '{"reply_status": "Positive"}'
+python "{project_root}/engine/update_outreach.py" --company_id "{company_id}" --data '{"persona2_reply_status": "Positive"}'
+python "{project_root}/engine/update_outreach.py" --company_id "{company_id}" --data '{"persona3_reply_status": "Positive"}'
 ```
 Valid reply status: `No reply`, `Replied`, `Positive`, `Not interested`. Anything other than `No reply` removes that contact from the follow-up queue permanently - the other contact at the same company, if any, is unaffected.
 
@@ -590,12 +587,12 @@ Do **not** run Steps 1 to 7 (finding personas or sending new connection requests
 When a connection request sits unaccepted, the method is to try email instead. **This skill only drafts - it never sends email, and it never guesses or looks up anyone's address.** The user finds the address and sends it themselves.
 
 ```bash
-python "<this skill's dir>/scripts/update_outreach.py" --due-emails
+python "{project_root}/engine/update_outreach.py" --due-emails
 ```
 
 Returns contacts whose request has been `Sent`/`Pending` for at least `{no_accept_email_days}` days with no email drafted yet, freshest first, each with `persona`, `persona_name`, `persona_title`, `persona_tier`, `company_website`, and `email_field` (the column to write). Take at most the first `{emails_per_run}`. For each, write a subject line and body in `{email_tone}`, matched to their track (recruiter: whether you could be considered for data roles; hiring manager: whether the work is something the team is bringing on; peer: a 15-minute chat), using `signal`/`why_relevant` for the specific detail, `{about_me}`, and `{pitch_link}` if set. Run it through `humanizer` if available. Save it:
 ```bash
-python "<this skill's dir>/scripts/update_outreach.py" --company_id "{company_id}" --data '{"<email_field>": "Subject: ...\n\n..."}'
+python "{project_root}/engine/update_outreach.py" --company_id "{company_id}" --data '{"<email_field>": "Subject: ...\n\n..."}'
 ```
 It appears on the dashboard's **Try email** tab with a Copy button. When the user has sent it, they set that contact's result to `Emailed` on the company page, which takes it off the tab. If the person later accepts the LinkedIn request, Step 8 still records `Accepted` as usual.
 

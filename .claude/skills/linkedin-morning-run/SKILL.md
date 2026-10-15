@@ -7,12 +7,12 @@ description: The scheduled MORNING run of the job search - find today's new anal
 
 > **FORMATTING RULE - NO EM DASHES:** Never use em dashes anywhere in any output. Use a regular hyphen (-) instead.
 
-This skill is an **orchestrator only**. It contains no search, note or send logic of its own - it runs two authoritative skills in order, so nothing here can drift out of sync with them:
+This skill is an **orchestrator only**. It contains no search, note or send logic of its own - it runs the job-finder skill and then the outreach engine, in order, so nothing here can drift out of sync with them:
 
 - `{project_root}/.claude/skills/linkedin-job-finder/SKILL.md`
-- `{project_root}/.claude/skills/linkedin-connect-outreach/SKILL.md`
+- `{project_root}/engine/OUTREACH_STEPS.md` (the outreach engine)
 
-(`{project_root}`: `python "{project_root}/.claude/skills/linkedin-connect-outreach/scripts/update_outreach.py" --print-root`, or the folder containing `schema.py`.)
+(`{project_root}`: `python "{project_root}/engine/update_outreach.py" --print-root`, or the folder containing `schema.py`.)
 
 It runs unattended on a timer. `confirm_before_first_send` in `outreach_config.json` decides whether it may send without asking; if that is `true` and nobody is there to answer, it **drafts only** (outreach Step 6) - never send unconfirmed.
 
@@ -24,7 +24,7 @@ Follow `linkedin-job-finder/SKILL.md` in full (Steps 0 to 6). It stops at `jobs_
 
 ## Step 2 - Contact each job's hiring manager and recruiter
 
-Follow `linkedin-connect-outreach/SKILL.md` **Steps 0 to 9** for the rows without a persona yet - job rows first (Step 1 there orders them), using **Step 3j** to find the department hiring manager and recruiter for each job. Every hard limit there applies unchanged: the note character limit, the daily cap (`--cap-check` before every send), the monthly note quota (plain connects once it is spent), the pause between sends, and stopping on a weekly-invite-limit modal.
+Follow `engine/OUTREACH_STEPS.md` **Steps 0 to 9** for the rows without a persona yet - job rows first (Step 1 there orders them), using **Step 3j** to find the department hiring manager and recruiter for each job. Every hard limit there applies unchanged: the note character limit, the daily cap (`--cap-check` before every send), the monthly note quota (plain connects once it is spent), the pause between sends, and stopping on a weekly-invite-limit modal.
 
 **Do not** run Step 3b (peers) unless `peer_enabled` is true, and do not run the follow-up pass here - messaging people who accepted is the night run's job (`linkedin-night-run`).
 

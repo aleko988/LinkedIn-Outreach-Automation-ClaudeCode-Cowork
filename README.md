@@ -18,8 +18,6 @@ find companies  ->  find 3 people   ->  write the note  ->  send  ->  follow up
 |---|---|
 | **`/linkedin-job-finder`** | Finds analyst job postings that fit your CV (US + Europe), keeps only remote roles you can take from your country, and saves one row per job with its department and hiring team. |
 | **`/linkedin-morning-run`** / **`/linkedin-night-run`** | The two schedules: morning = find today's jobs and send requests to each job's department hiring manager and recruiter; night = record acceptances and message each new connection about the role with your CV link. |
-| **`/linkedin-connect-outreach`** | Walks your persona tiers to find the right person at each company, writes a note under the character limit, sends the connection request with pacing and a daily cap, and records the result. Runs the daily acceptance check and follow-up pass too. |
-| **`/linkedin-message-accepted`** | Messages everyone already accepted with no message yet, or due for a follow-up - on demand, without a full find-and-send cycle. |
 | **Dashboard** (port 5002) | The weekly sheet - company, every contact (manager, recruiter, peer), request sent, follow up - plus a ready-to-send queue, an awaiting-message queue, a follow-up-due queue, a try-email queue, acceptance rate, and today's remaining cap. |
 
 ## Setup
@@ -88,7 +86,8 @@ outreach_config.json           your live campaign settings
 outreach_config.example.json   the shipped default
 CLAUDE.md                      how the agent should work in this project
 RETARGETING.md                 how to change or add a setting
-.claude/skills/                the skills (authoritative)
+.claude/skills/                the three skills: job finder, morning run, night run (authoritative)
+engine/                        the outreach playbook + update_outreach.py (shared by the runs, not a skill)
 dashboard/app.py               the Flask dashboard, port 5002
 dist/*.plugin                  the Cowork plugin (thin launchers)
 ```

@@ -96,8 +96,8 @@ This creates an empty `connections.csv` with the correct columns. It will not ov
 **Claude Code:** the skills in `.claude/skills/` auto-load. The user already has:
 - `/linkedin-job-finder` - finds job postings that fit the CV and the user's location
 - `/linkedin-morning-run` / `/linkedin-night-run` - the two scheduled runs (find jobs + send; check acceptances + message)
-- `/linkedin-connect-outreach` - finds the right person, writes the note, sends the request
-- `/linkedin-message-accepted` - messages everyone already accepted with no message yet, or due for a follow-up, without a full find-and-send cycle
+
+The find-person / note / send / follow-up logic is not a skill of its own: it lives in **`engine/OUTREACH_STEPS.md`** (the playbook) and **`engine/update_outreach.py`** (the script that enforces the note limit, daily cap and note quota). The morning and night runs follow it.
 
 **Cowork:** present `dist/linkedin-connect-outreach.plugin` with `present_files` so the user can click Install.
 
@@ -121,8 +121,8 @@ Before the first outreach run, tell the user in plain language what will happen:
 
 0. **Job finder (the current campaign's entry point)** searches LinkedIn Jobs for analyst roles that fit the user's CV (`finder.cv_profile`) in the configured markets, keeps only **remote jobs the user can legally take from `candidate_country`** (no relocation, no sponsorship), records the job's department and its "Meet the hiring team" people, and appends **one row per job** (`company_id` = `<company-slug>--<job_id>`, job columns filled). Then the outreach skill (Step 3j) contacts that department's hiring manager and recruiter, falling back to general data managers / recruiters / talent acquisition. The **morning run** skill chains job finder -> outreach send; the **night run** skill records acceptances and sends each new connection the "who I am, this role, my CV, would appreciate feedback" message. Legacy company-only rows get no more follow-ups (`followup_scope: job_rows`).
 1. **Company finder (removed 2026-10-15).** The old company-first finder skill was retired in favor of the job finder. The 138 company-only rows it created stay in `connections.csv` (forward-only); `seen_companies.txt` is kept as their history. Its git history has the skill if company-first search is ever wanted again.
-2. **Connect outreach** works **three networking tracks** per company - the hiring manager, a recruiter verified to hire for the field, and (if `peer_enabled`) a peer on the team found through common ground (same university, background or department), stored in a third contact slot `persona3_*`. It scans `connections.csv` for **any row where `persona_name` is blank** - regardless of `outreach_status` or how long ago it was added - plus older companies with no peer yet, finds the right person per the configured tiers, writes a note of 200 characters or less, sends the request under the daily cap and monthly note quota, and records the result. It also runs the daily acceptance-check pass (Step 11: checks LinkedIn's Connections page for new acceptances) and the **follow-up pass**: accepted connections with no reply get messaged immediately if they never received a note, otherwise follow-up 1 on the day the acceptance is detected and follow-up 2 four days after that (both configurable), with the `pitch_link` (CV / video pitch) in the first message to recruiters and hiring managers. Requests that sit unaccepted for `no_accept_email_days` get a fallback email **drafted** (Step 12) - the user finds the address and sends it; the skill never sends email.
-3. **Message accepted connections** is a lighter, on-demand entry point into just the follow-up pass - message everyone already accepted with no message yet, without re-checking for new acceptances or running the full find-and-send cycle. Use it to clear the dashboard's "Awaiting message" tab right now, rather than waiting for the daily schedule.
+2. **The outreach engine** (`engine/OUTREACH_STEPS.md` + `engine/update_outreach.py`, formerly the connect-outreach skill) works **three networking tracks** per company - the hiring manager, a recruiter verified to hire for the field, and (if `peer_enabled`) a peer on the team found through common ground (same university, background or department), stored in a third contact slot `persona3_*`. It scans `connections.csv` for **any row where `persona_name` is blank** - regardless of `outreach_status` or how long ago it was added - plus older companies with no peer yet, finds the right person per the configured tiers, writes a note of 200 characters or less, sends the request under the daily cap and monthly note quota, and records the result. It also runs the daily acceptance-check pass (Step 11: checks LinkedIn's Connections page for new acceptances) and the **follow-up pass**: accepted connections with no reply get messaged immediately if they never received a note, otherwise follow-up 1 on the day the acceptance is detected and follow-up 2 four days after that (both configurable), with the `pitch_link` (CV / video pitch) in the first message to recruiters and hiring managers. Requests that sit unaccepted for `no_accept_email_days` get a fallback email **drafted** (Step 12) - the user finds the address and sends it; the skill never sends email.
+3. **Message accepted connections (removed 2026-10-15)** - the night run now does this every day. To message people right away, ask for the night run on demand.
 4. The **dashboard** reads `connections.csv` and renders it as the weekly sheet: company, profile, persona, request sent, follow up - plus tabs for who's awaiting a message vs. already messaged.
 
 ## Scheduling
@@ -133,8 +133,8 @@ A scheduled run needs a **logged-in LinkedIn browser** and the **local** `connec
 
 Two Cowork scheduled tasks, both on the user's machine (they need the logged-in browser):
 
-- **Morning** (e.g. 09:00 daily): *"Use the linkedin-connect-outreach:linkedin-morning-run skill to find today's new matching jobs and send connection requests to each job's hiring manager and recruiter. confirm_before_first_send is false, so send directly. Respect every hard limit; if LinkedIn shows a CAPTCHA, security checkpoint, or the weekly invite limit, stop immediately."*
-- **Night** (e.g. 22:00 daily): *"Use the linkedin-connect-outreach:linkedin-night-run skill to record today's accepted connection requests and message each new connection about their role with my CV attached. Do not find jobs or send new connection requests."*
+- **Morning** (e.g. 09:00 daily): *"Use the linkedin-morning-run skill to find today's new matching jobs and send connection requests to each job's hiring manager and recruiter. confirm_before_first_send is false, so send directly. Respect every hard limit; if LinkedIn shows a CAPTCHA, security checkpoint, or the weekly invite limit, stop immediately."*
+- **Night** (e.g. 22:00 daily): *"Use the linkedin-night-run skill to record today's accepted connection requests and message each new connection about their role with my CV attached. Do not find jobs or send new connection requests."*
 
 These **replace** the older daily send-pass and acceptance-check tasks below - running those too would send to the backlog and re-check acceptances twice. Offer to disable them.
 
@@ -144,7 +144,7 @@ The company-finder skill has been removed (see above). The older tasks below are
 
 ### Daily send pass: persona + note + send, on the existing backlog
 
-Runs Steps 1-9 of `linkedin-connect-outreach` against companies **already in `connections.csv`** - find a persona, draft the note, send under the daily cap and monthly note quota - explicitly **not** finding new companies. Current live task prompt:
+Runs Steps 1-9 of the outreach engine (formerly the `linkedin-connect-outreach` skill) against companies **already in `connections.csv`** - find a persona, draft the note, send under the daily cap and monthly note quota - explicitly **not** finding new companies. Current live task prompt:
 
 > *"Run the LinkedIn Connect Outreach project's daily send pass ... Use the linkedin-connect-outreach:linkedin-connect-outreach skill ... to run Steps 1 through 9 ... confirm_before_first_send is now false, so send directly without asking for approval - do not stop to wait for a human ... Do NOT run the LinkedIn Company Finder skill ... After the send pass, also run Step 8 (check for new connection acceptances) and, if followup_enabled is true, Step 10 ... Respect every hard limit ... If LinkedIn shows a CAPTCHA, security checkpoint, or the weekly invite limit, stop immediately."*
 
@@ -224,8 +224,9 @@ If unsure, ask: "Do you want me to change your settings to X, or run with your c
 │   ├── linkedin-job-finder/       (SKILL.md + scripts/append_jobs.py)
 │   ├── linkedin-morning-run/      (SKILL.md only - orchestrates job finder + outreach send)
 │   ├── linkedin-night-run/        (SKILL.md only - orchestrates acceptance check + messages)
-│   ├── linkedin-connect-outreach/ (SKILL.md + scripts/update_outreach.py)
-│   └── linkedin-message-accepted/ (SKILL.md only - reuses linkedin-connect-outreach's script)
+├── engine/                     <- the outreach engine (NOT a skill - followed by the morning/night runs)
+│   ├── OUTREACH_STEPS.md          (find person, note, send, acceptances, follow-ups, email drafts)
+│   └── update_outreach.py         (enforces note limit, daily cap, note quota; the only writer of outreach columns)
 ├── dist/
 │   └── linkedin-connect-outreach.plugin  <- Cowork plugin (present for install)
 └── dashboard/
