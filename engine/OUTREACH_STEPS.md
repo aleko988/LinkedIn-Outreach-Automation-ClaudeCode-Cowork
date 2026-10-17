@@ -225,17 +225,31 @@ and verify from the headline that the person is actually at this company today.
 
 ### Step 3j - Job rows: find the hiring manager and recruiter for THIS role
 
-A job row is about one posting (`job_title`, `job_url`, `job_department`). Contact the people involved in hiring **for that department**, not just anyone at the company. Fill each entry in `{job_contacts}` (by default slot 1 = Hiring Manager, slot 2 = Recruiter) by trying these sources in order, stopping at the first good match for that slot:
+A job row is about one posting (`job_title`, `job_url`, `job_department`). Contact the people who actually hire **for that department and this role** - never just the first manager or recruiter at the company. A general contact is a last resort, not a quick default. Fill each entry in `{job_contacts}` (by default slot 1 = Hiring Manager, slot 2 = Recruiter).
 
-1. **The job's own hiring team.** If `notes` lists a `Hiring team:` (captured by the job finder from "Meet the hiring team"), or the job page at `job_url` shows that section, use those people first: a recruiter/talent headline fills the Recruiter slot, a manager/lead/head headline fills the Hiring Manager slot. The person who posted the job is the most relevant contact there is.
-2. **Department-specific search** (only if `job_department` is set). People tab with the slot's `department_keywords`, with `{job_department}` replaced by the row's `job_department` (spaces as `+`), and the slot's `function_code`:
+**Ranking - always take the highest rung you can verify:**
+
+| Rung | Hiring Manager slot | Recruiter slot |
+|---|---|---|
+| 1 | named in "Meet the hiring team" with a manager/lead/head headline | named in "Meet the hiring team" (usually the person who posted the job) |
+| 2 | the role the posting says it reports to (`Reports to:` in `notes`, e.g. "Head of Marketing Analytics") | a recruiter whose recent posts (last ~60 days) share **this job** or other roles in **this department** |
+| 3 | a manager/lead/head whose current role is in **this department**, ideally its analytics/data side | a recruiter whose headline or About names **this department** or its function (e.g. "Tech & Data recruiting", "Hiring for Product") |
+| 4 | the company's general data/analytics/BI lead | a general Recruiter / Talent Acquisition at the company |
+
+**How to search** (pace every page load 4 to 9 seconds apart):
+1. **Hiring team.** Read `Hiring team:` from `notes`, or open `job_url` and read the "Meet the hiring team" section. Classify each person by headline into the two slots.
+2. **Reporting line** (Hiring Manager, if `notes` has `Reports to:`). People tab with that title as the keyword.
+3. **Department search.** People tab with the slot's `department_keywords`, `{job_department}` replaced by the row's `job_department` (spaces as `+`), and the slot's `function_code`; retry once without `facetCurrentFunction` on 0 results:
    ```
    https://www.linkedin.com/company/{slug}/people/?keywords={department_keywords}&facetCurrentFunction={function_code}
    ```
-   Retry once without `facetCurrentFunction` on 0 results. For the Hiring Manager, prefer someone whose headline names that department **and** analytics/data (e.g. "Healthcare Analytics Manager"), then the department's manager/lead. For the Recruiter, prefer one whose headline, About or recent posts mention that department, analytics/data roles, or this job (Step 4a's check, with the department added to `{recruiter_focus_keywords}`).
-3. **General fallback.** If nobody fits the department, use the slot's `general_keywords` (general data/analytics manager; general Recruiter / Talent Acquisition), same as Step 3.
+   For the Recruiter slot also try `Recruiter+{job_title words}` and `Talent+{job_department}`.
+4. **Verify before choosing.** Open up to `{candidates_to_inspect}` candidates per slot. For each, check: (a) the **current** position in Experience is at this company (headlines can be stale); (b) for a hiring manager - the department matches and the level is roughly one or two above the role (a team lead, manager or head of that team; not the CEO of a 1,000-person company); (c) for a recruiter - open `<profile URL>/recent-activity/all/` and look for this job or same-department roles, then headline/About. Pick the candidate on the highest rung.
+5. **General fallback** (rung 4) only when steps 1 to 4 found nobody on rungs 1 to 3 - and say so (below).
 
-Record which source matched in `persona_tier` / `persona2_tier`, e.g. `Hiring Manager - Healthcare dept`, `Recruiter - job poster`, `Recruiter - general TA`. That label is what tells the user (and the dashboard) how targeted the contact is.
+**Record why.** Set `persona_tier` / `persona2_tier` to the role + rung, e.g. `Hiring Manager - reports-to match`, `Hiring Manager - Payments dept`, `Recruiter - job poster`, `Recruiter - posts Data roles`, `Recruiter - general TA (no dept match found)`. Also add one line per contact to `notes`: `Why <name>: <the evidence you saw, e.g. "reposted this job on Oct 12" / "Head of Data, current role, team the analyst joins">`. The dashboard shows both, so the user can see at a glance how well each contact fits the role.
+
+**Never** contact two recruiters or two managers for the same job, and never pick someone whose current role is outside this company.
 
 ### Step 3b - Find a peer (only if `{peer_enabled}`)
 

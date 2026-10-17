@@ -120,6 +120,8 @@ Record `location_eligibility` as one short sentence quoting the deciding line, e
 
 **Department.** Find which team the role sits in - this is what the outreach skill uses to reach the right hiring manager and recruiter. Look, in order, at: the title ("Healthcare Data Analyst"), a "Team" / "Department" / "About the team" line, who the role reports to ("reporting to the Head of Marketing Analytics"), and the product area described. Write `job_department` as one or two plain words (`Healthcare`, `Marketing`, `Product`, `Finance`, `Operations`, `Risk`). If the posting gives no team, leave it blank - the outreach skill then uses the general data / recruiting contacts.
 
+**Reporting line.** If the posting says who the role reports to ("reporting to the Head of Marketing Analytics", "you'll join X's team"), add `Reports to: <that title or name>` to `notes` - the outreach engine searches for exactly that person first.
+
 **Hiring team.** If the page has a **"Meet the hiring team"** section, read every person in it: name, headline, and profile link (`a[href*="/in/"]` inside that section). Put them in `notes` as `Hiring team: Name (headline) <url>; ...` - the outreach skill checks these first, since the job poster is the single most relevant person to contact.
 
 ---
