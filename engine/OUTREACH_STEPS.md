@@ -481,17 +481,19 @@ Do this whenever the user asks to check replies, at the start of a later find-an
 ```bash
 python "{project_root}/engine/update_outreach.py" --acceptance-check-status
 ```
-This prints `{"last_checked_date": "YYYY-MM-DD"}` - everyone connected on or before that date was already seen on a previous check.
+This prints `{"last_checked_date": "YYYY-MM-DD"}` - the day of the last check. **The check always covers everything from that day up to now, however many days ago it was** (a check on the 20th after a last check on the 10th reads back through the 10th). The cutoff day itself is re-read too, because people can accept after the check ran that day.
 
 ### 8b - Read the Connections page down to the cutoff
 
 Navigate to `https://www.linkedin.com/mynetwork/invite-connect/connections/`. Make sure the sort is **"Recently added"** (the default; if it shows a different sort, open the sort dropdown and select it) - the list must be newest-first for the early-stop below to be valid.
 
-Run the **page-ready gate**, then read entries from the top. Each shows a name, headline, profile link, and a "Connected on <date>" line - extract all three plus the date for each. **Stop reading (and stop paginating) the moment you reach an entry dated on or before the cutoff from 8a** - everything at or below that point was already processed on a previous check, and everything above it is new since then.
+Run the **page-ready gate**, then read entries from the top. Each shows a name, headline, profile link, and a "Connected on <date>" line - extract all three plus the date for each. **Keep reading (and paginating) through every entry dated on or after the cutoff day from 8a, and stop only at the first entry dated strictly before it.** Re-reading the cutoff day is deliberate and harmless: 8c skips anyone already recorded as `Accepted`.
+
+LinkedIn often shows a relative date ("Connected 3 days ago", "1 week ago") instead of an exact one. Convert it to a date range and **only stop once an entry is clearly older than the cutoff by more than a day** (e.g. for a cutoff 10 days ago, "1 week ago" is not enough to stop; "2 weeks ago" is). When in doubt, read one more page - a missed acceptance means a person never gets their message, an extra page costs a few seconds.
 
 ### 8c - Match new connections against the tracker
 
-For each newly-connected entry (dated after the cutoff), look for a row in `connections.csv` where `persona_linkedin`, `persona2_linkedin` or `persona3_linkedin` matches this profile's URL and that contact's result (`connection_result` / `persona2_connection_result` / `persona3_connection_result`) is not already `Accepted`. Match on the profile path (the `/in/<slug>` part), not the display name - names can collide.
+For each entry read in 8b (dated on or after the cutoff day), look for a row in `connections.csv` where `persona_linkedin`, `persona2_linkedin` or `persona3_linkedin` matches this profile's URL and that contact's result (`connection_result` / `persona2_connection_result` / `persona3_connection_result`) is not already `Accepted`. Match on the profile path (the `/in/<slug>` part), not the display name - names can collide.
 
 ```bash
 python "{project_root}/engine/update_outreach.py" --company_id "{company_id}" --persona 1|2|3 --result Accepted
@@ -587,7 +589,7 @@ Valid reply status: `No reply`, `Replied`, `Positive`, `Not interested`. Anythin
 
 This is a **lightweight subset** of this skill - Steps 8 and 10 only, run on their own once a day, without a full find-and-send cycle. Use this when the trigger is the daily schedule (see `CLAUDE.md` -> Scheduling) rather than an on-demand "run my outreach" request.
 
-1. Run **Step 8** in full (8a to 8d) - it reads only the Connections page entries newer than the last check, matches them against the tracker, records any new `Accepted` results, and advances the cutoff. It never reads the user's full connections list.
+1. Run **Step 8** in full (8a to 8d) - it reads the Connections page back to the day of the last check (inclusive, however long ago that was), matches them against the tracker, records any new `Accepted` results, and advances the cutoff. It never reads the user's full connections list.
 2. Run **Step 10** to draft (and, only if `{followup_auto_send}` is true, send) the follow-up for anything now due - this is also where anyone who accepted a plain connect (`immediate_no_note: true`) gets their first real message right away, same-day, rather than waiting.
 3. Run **Step 12** to draft fallback emails for requests that have sat unaccepted too long.
 4. Report briefly: how many new acceptances, how many messages went out (split: immediate no-note catch-ups vs scheduled follow-ups) vs how many are waiting for the user in the dashboard, and how many fallback emails were drafted.

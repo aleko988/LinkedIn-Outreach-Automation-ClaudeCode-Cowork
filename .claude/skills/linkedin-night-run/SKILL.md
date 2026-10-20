@@ -1,6 +1,6 @@
 ---
 name: linkedin-night-run
-description: The scheduled NIGHT run of the job search - check which connection requests were accepted today, and send each new connection a short message (who the user is, the specific role they are reaching out about, their CV attached as a PDF, and a request for feedback); also sends the reminder when one is due. Use when the night schedule fires, or when the user asks to "check who accepted and message them".
+description: The scheduled NIGHT run of the job search - check which connection requests were accepted since the last check (every day back to the last run, so a missed night loses nothing), and send each new connection a short message (who the user is, the specific role they are reaching out about, their CV attached as a PDF, and a request for feedback); also sends the reminder when one is due. Use when the night schedule fires, or when the user asks to "check who accepted and message them".
 ---
 
 # LinkedIn Night Run (check acceptances -> message them)
@@ -13,14 +13,14 @@ This skill is an **orchestrator only**. All logic lives in `{project_root}/engin
 
 ---
 
-## Step 1 - Record today's acceptances
+## Step 1 - Record every acceptance since the last check
 
-Run outreach **Step 8** in full (8a to 8d): read LinkedIn's Connections page (sorted "Recently added") only down to the last-checked cutoff, match new connections against `persona_linkedin` / `persona2_linkedin` / `persona3_linkedin`, record each with `--persona N --result Accepted` (this stamps `accepted_date`), then advance the cutoff with `--mark-checked`.
+Run outreach **Step 8** in full (8a to 8d): read LinkedIn's Connections page (sorted "Recently added") back through the day of the last check - inclusive, however many days ago it was (if the last check was the 10th and today is the 20th, read back through the 10th), match new connections against `persona_linkedin` / `persona2_linkedin` / `persona3_linkedin`, record each with `--persona N --result Accepted` (this stamps `accepted_date`), then advance the cutoff with `--mark-checked`.
 
 ## Step 2 - Message who is due
 
 Run outreach **Step 10**. With the current config, `--due-followups` returns:
-- everyone who **accepted today** (follow-up 1 is due the same day), and
+- everyone whose acceptance was just recorded in Step 1, on any day since the last check (follow-up 1 is due as soon as it is recorded), and
 - anyone whose first message went out `followup_2_days` ago with no reply (the reminder).
 
 For job rows, write follow-up 1 in `job_followup_tone`: thanks for connecting, who the user is, the exact role (with the job link), the CV **attached as the PDF in `cv_attachment`** (Step 10's "Attaching the CV" - falls back to `pitch_link` only if attaching fails), and a request for feedback. Respect `followup_char_limit`, run it through `humanizer` if available, record it with `--followup 1 --message "..." --persona N`, and, if `followup_auto_send` is true, send it with the Message button exactly as Step 10 describes, pausing between messages.

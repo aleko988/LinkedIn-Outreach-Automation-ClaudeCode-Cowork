@@ -45,7 +45,7 @@ SKILLS = {
     },
     "linkedin-night-run": {
         "title": "LinkedIn Night Run",
-        "description": "Scheduled night run: record today's accepted connection requests and message each new connection about the specific role with your CV attached. Use when the night schedule fires or when asked to check who accepted and message them.",
+        "description": "Scheduled night run: record every connection request accepted since the last check and message each new connection about the specific role with your CV attached. Use when the night schedule fires or when asked to check who accepted and message them.",
         "script_path": "engine/update_outreach.py",
         "script_step": "the acceptance-check, due-followups and CSV-update steps",
     },
